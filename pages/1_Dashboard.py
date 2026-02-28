@@ -11,8 +11,6 @@ from datetime import date
 
 from src.data_store import get_connection, get_entries_df, get_available_years
 
-st.set_page_config(page_title="Dashboard", page_icon="\U0001f4ca", layout="wide")
-
 from src.theme import (
     apply_theme, neon_chart_layout, COLORS, NEON_SEQUENCE,
     SCALE_CYAN_MAGENTA, SCALE_NEON_HEATMAP, SCALE_MAGENTA_FIRE,

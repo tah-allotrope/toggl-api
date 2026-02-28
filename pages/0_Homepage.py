@@ -1,97 +1,25 @@
 """
-Toggl Time Journal -- Homepage.
-
-Shows a card-based journal of Highlight-tagged time entries for the
-current week.  Streamlit auto-discovers pages in the pages/ directory.
-
-Run with:  streamlit run app.py
+Homepage page: card-based journal of Highlight-tagged time entries
+for the current week.
 """
 
 import streamlit as st
 from datetime import date, datetime, timedelta
-import time
+import os
 
-st.set_page_config(
-    page_title="Homepage",
-    page_icon="\u23f0",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
+from src.theme import apply_theme
+from src.data_store import get_connection, get_entries_df
+from src.sync import sync_all, get_sync_status
 
-from src.theme import apply_theme, COLORS
 apply_theme()
-
-from src.data_store import get_connection, get_available_years, get_entries_df
-from src.sync import sync_all, sync_current_year, get_sync_status
-
-# ---------------------------------------------------------------------------
-# Sidebar: Sync controls
-# ---------------------------------------------------------------------------
-
-st.sidebar.title("Data Sync")
-
-sync_status = get_sync_status()
-
-if sync_status["has_data"]:
-    years = sync_status["years_with_data"]
-    st.sidebar.success(f"Data loaded: {min(years)}-{max(years)}")
-    if sync_status["last_full_sync"]:
-        st.sidebar.caption(f"Last full sync: {sync_status['last_full_sync'][:16]}")
-    if sync_status["last_incremental_sync"]:
-        st.sidebar.caption(f"Last quick sync: {sync_status['last_incremental_sync'][:16]}")
-else:
-    st.sidebar.warning("No data yet. Run a full sync to get started.")
-
-st.sidebar.divider()
-
-# Quick sync (current year only)
-if st.sidebar.button("Quick Sync (current year)", type="primary", use_container_width=True):
-    try:
-        from src.toggl_client import TogglClient
-        client = TogglClient()
-        progress_bar = st.sidebar.progress(0)
-        status_text = st.sidebar.empty()
-
-        def on_progress(msg, frac):
-            status_text.text(msg)
-            progress_bar.progress(min(frac, 1.0))
-
-        result = sync_current_year(client, progress_callback=on_progress)
-        st.sidebar.success(f"Synced {result['entries']} entries for {result['year']}")
-        time.sleep(1.5)
-        st.rerun()
-    except Exception as e:
-        st.sidebar.error(f"Sync failed: {e}")
-
-# Full sync
-with st.sidebar.expander("Full Sync (all years)"):
-    earliest = st.number_input("Earliest year", min_value=2006, max_value=date.today().year, value=2017)
-    if st.button("Run Full Sync", use_container_width=True):
-        try:
-            from src.toggl_client import TogglClient
-            client = TogglClient()
-            progress_bar = st.progress(0)
-            status_text = st.empty()
-
-            def on_full_progress(msg, frac):
-                status_text.text(msg)
-                progress_bar.progress(min(frac, 1.0))
-
-            result = sync_all(client, earliest_year=int(earliest), progress_callback=on_full_progress)
-            st.success(
-                f"Synced {result['total_entries']} entries across {result['years_synced']} years "
-                f"({result['projects']} projects, {result['tags']} tags)"
-            )
-            time.sleep(1.5)
-            st.rerun()
-        except Exception as e:
-            st.error(f"Sync failed: {e}")
 
 # ---------------------------------------------------------------------------
 # Main content: Homepage -- This Week's Highlights
 # ---------------------------------------------------------------------------
 
 st.title("Homepage")
+
+sync_status = get_sync_status()
 
 if not sync_status["has_data"]:
     st.info(
@@ -104,7 +32,6 @@ if not sync_status["has_data"]:
 
     # Auto-sync: if the API token is configured but no data exists
     # (e.g. cold start on Streamlit Cloud), run a full sync automatically.
-    import os
     token = os.getenv("TOGGL_API_TOKEN", "")
     if not token:
         try:
@@ -123,6 +50,7 @@ if not sync_status["has_data"]:
                 auto_status.text(msg)
                 auto_bar.progress(min(frac, 1.0))
 
+            import time
             result = sync_all(client, earliest_year=2017, progress_callback=on_auto_progress)
             st.success(
                 f"Auto-sync complete! {result['total_entries']} entries across "
@@ -195,14 +123,14 @@ else:
         else:
             dur_str = f"{int(hours * 60)}m"
 
-        # Build the metadata line: day · project · duration · time
+        # Build the metadata line: day . project . duration . time
         meta_parts = [day_label]
         if project:
             meta_parts.append(project)
         meta_parts.append(dur_str)
         if time_label:
             meta_parts.append(time_label)
-        meta_line = "  ·  ".join(meta_parts)
+        meta_line = "  \u00b7  ".join(meta_parts)
 
         # Render a card using a bordered container
         with st.container(border=True):

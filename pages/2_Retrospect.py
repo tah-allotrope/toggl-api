@@ -21,7 +21,6 @@ from src.theme import (
     SCALE_CYAN_MONO, SCALE_MAGENTA_FIRE,
 )
 
-st.set_page_config(page_title="Retrospect", page_icon="\U0001f50d", layout="wide")
 apply_theme()
 st.title("Retrospect")
 

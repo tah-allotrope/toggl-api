@@ -9,8 +9,6 @@ import streamlit as st
 from src.queries import answer_question
 from src.data_store import get_connection, get_available_years
 
-st.set_page_config(page_title="Chat", page_icon="\U0001f4ac", layout="wide")
-
 from src.theme import apply_theme
 apply_theme()
 
