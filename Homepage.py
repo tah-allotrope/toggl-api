@@ -1,27 +1,27 @@
 """
-Toggl Time Journal -- Main app entry point.
+Toggl Time Journal -- Homepage.
 
-This is the home page that shows overall stats and provides sync controls.
-Streamlit auto-discovers pages in the pages/ directory.
+Shows a card-based journal of Highlight-tagged time entries for the
+current week.  Streamlit auto-discovers pages in the pages/ directory.
 
 Run with:  streamlit run app.py
 """
 
 import streamlit as st
-from datetime import date
+from datetime import date, datetime, timedelta
 import time
 
 st.set_page_config(
-    page_title="Toggl Time Journal",
+    page_title="Homepage",
     page_icon="\u23f0",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-from src.theme import apply_theme
+from src.theme import apply_theme, COLORS
 apply_theme()
 
-from src.data_store import get_connection, get_total_stats, get_available_years
+from src.data_store import get_connection, get_available_years, get_entries_df
 from src.sync import sync_all, sync_current_year, get_sync_status
 
 # ---------------------------------------------------------------------------
@@ -88,11 +88,10 @@ with st.sidebar.expander("Full Sync (all years)"):
             st.error(f"Sync failed: {e}")
 
 # ---------------------------------------------------------------------------
-# Main content: Overview stats
+# Main content: Homepage -- This Week's Highlights
 # ---------------------------------------------------------------------------
 
-st.title("Toggl Time Journal")
-st.markdown("Your personal time tracking history, visualized and searchable.")
+st.title("Homepage")
 
 if not sync_status["has_data"]:
     st.info(
@@ -137,29 +136,75 @@ if not sync_status["has_data"]:
 
     st.stop()
 
-# Show overview stats
+# ---------------------------------------------------------------------------
+# Query: Highlight entries for the current ISO week
+# ---------------------------------------------------------------------------
+
+today = date.today()
+iso_year, iso_week, _ = today.isocalendar()
+
+# Compute the Monday-Sunday date range for this ISO week
+monday = datetime.strptime(f"{iso_year}-W{iso_week:02d}-1", "%G-W%V-%u").date()
+sunday = monday + timedelta(days=6)
+
 conn = get_connection()
-stats = get_total_stats(conn)
-years = get_available_years(conn)
+df = get_entries_df(conn, start_date=monday.isoformat(), end_date=sunday.isoformat())
 conn.close()
 
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("Total Hours", f"{stats['total_hours']:,.0f}")
-col2.metric("Total Entries", f"{stats['total_entries']:,}")
-col3.metric("Unique Projects", str(stats['unique_projects']))
-col4.metric("Years Tracked", str(stats['years_tracked']))
+# Filter to entries that carry the "Highlight" tag
+if not df.empty and "tags_list" in df.columns:
+    highlights = df[df["tags_list"].apply(lambda tags: "Highlight" in tags)].copy()
+else:
+    highlights = df.iloc[0:0]  # empty DataFrame with same columns
 
-st.divider()
+# ---------------------------------------------------------------------------
+# Render: week header + card journal
+# ---------------------------------------------------------------------------
 
-st.markdown(f"**Data range:** {stats['earliest_date']} to {stats['latest_date']}")
-st.markdown(f"**Years with data:** {', '.join(str(y) for y in years)}")
-
-st.divider()
-
-st.markdown("### Navigate")
 st.markdown(
-    "Use the sidebar to navigate between pages:\n\n"
-    "- **Dashboard** -- Year-level charts, project breakdowns, activity heatmaps\n"
-    "- **Retrospect** -- \"On this day\" across all years, week and year comparisons\n"
-    "- **Chat** -- Ask questions about your time data in natural language"
+    f"### This Week's Highlights"
 )
+st.caption(
+    f"Week {iso_week}  --  {monday.strftime('%b %d')} to {sunday.strftime('%b %d, %Y')}"
+)
+
+if highlights.empty:
+    st.markdown("")
+    st.info("No highlights logged this week yet.")
+else:
+    # Sort chronologically so the journal reads like a timeline
+    highlights = highlights.sort_values("start", ascending=True)
+
+    for _, row in highlights.iterrows():
+        # Parse start datetime for display
+        try:
+            start_dt = datetime.fromisoformat(str(row["start"]).replace("Z", "+00:00"))
+            day_label = start_dt.strftime("%a, %b %d")      # e.g. "Mon, Feb 23"
+            time_label = start_dt.strftime("%H:%M")          # e.g. "09:15"
+        except (ValueError, TypeError):
+            day_label = str(row.get("start_date", ""))
+            time_label = ""
+
+        description = row.get("description") or "(no description)"
+        project = row.get("project_name") or ""
+        hours = row.get("duration_hours", 0)
+
+        # Format the duration as a readable string
+        if hours >= 1:
+            dur_str = f"{hours:.1f}h"
+        else:
+            dur_str = f"{int(hours * 60)}m"
+
+        # Build the metadata line: day · project · duration · time
+        meta_parts = [day_label]
+        if project:
+            meta_parts.append(project)
+        meta_parts.append(dur_str)
+        if time_label:
+            meta_parts.append(time_label)
+        meta_line = "  ·  ".join(meta_parts)
+
+        # Render a card using a bordered container
+        with st.container(border=True):
+            st.markdown(f"**{description}**")
+            st.caption(meta_line)

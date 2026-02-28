@@ -136,7 +136,7 @@ with col_bar:
         coloraxis_colorbar=dict(
             title="Hours",
             tickfont=dict(color=COLORS["text_muted"]),
-            titlefont=dict(color=COLORS["text_muted"]),
+            title_font=dict(color=COLORS["text_muted"]),
         ),
     )
     st.plotly_chart(fig, use_container_width=True)
@@ -182,7 +182,7 @@ if "tags_list" in df.columns:
             coloraxis_colorbar=dict(
                 title="Hours",
                 tickfont=dict(color=COLORS["text_muted"]),
-                titlefont=dict(color=COLORS["text_muted"]),
+                title_font=dict(color=COLORS["text_muted"]),
             ),
         )
         st.plotly_chart(fig, use_container_width=True)
@@ -280,7 +280,7 @@ def _render_heatmap(data: pd.DataFrame, title: str, height: int = 220):
         coloraxis_colorbar=dict(
             title="Hours",
             tickfont=dict(color=COLORS["text_muted"]),
-            titlefont=dict(color=COLORS["text_muted"]),
+            title_font=dict(color=COLORS["text_muted"]),
         ),
     )
     st.plotly_chart(fig, use_container_width=True)
