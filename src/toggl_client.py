@@ -20,6 +20,19 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
+def _get_toggl_token() -> str:
+    """Resolve TOGGL_API_TOKEN from st.secrets (Streamlit Cloud) or .env."""
+    # Streamlit Cloud secrets take priority
+    try:
+        import streamlit as st
+        token = st.secrets.get("TOGGL_API_TOKEN", "")
+        if token:
+            return token
+    except Exception:
+        pass
+    return os.getenv("TOGGL_API_TOKEN", "")
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -68,7 +81,7 @@ class TogglClient:
     """Toggl Track API client with built-in rate limiting."""
 
     def __init__(self, api_token: str | None = None):
-        self.api_token = api_token or os.getenv("TOGGL_API_TOKEN", "")
+        self.api_token = api_token or _get_toggl_token()
         if not self.api_token:
             raise ValueError(
                 "TOGGL_API_TOKEN not set. "

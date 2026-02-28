@@ -107,6 +107,11 @@ if not sync_status["has_data"]:
     # (e.g. cold start on Streamlit Cloud), run a full sync automatically.
     import os
     token = os.getenv("TOGGL_API_TOKEN", "")
+    if not token:
+        try:
+            token = st.secrets.get("TOGGL_API_TOKEN", "")
+        except Exception:
+            pass
     if token:
         st.subheader("Auto-syncing your data...")
         try:
