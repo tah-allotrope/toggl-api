@@ -1,6 +1,6 @@
 # Active Context -- Toggl Time Tracking Dashboard
 
-> Last updated: 2026-02-28
+> Last updated: 2026-02-28 (post st.navigation restructure)
 
 ## Project Overview
 
@@ -24,7 +24,7 @@ toggl-api/
 ├── .streamlit/
 │   └── config.toml           # Dark theme, cyan primary, monospace font
 ├── requirements.txt          # streamlit, requests, plotly, python-dotenv, pandas
-├── app.py                    # Home page + sidebar sync controls + auto-sync on cold start
+├── app.py                    # Router/entrypoint: st.navigation + shared sidebar sync controls
 ├── src/
 │   ├── __init__.py
 │   ├── toggl_client.py       # Toggl API v9 + Reports v3 client with rate limiter
@@ -33,6 +33,7 @@ toggl-api/
 │   ├── queries.py            # Pattern-matching chat engine (12 query types)
 │   └── theme.py              # Cyberpunk neon CSS injection + color palette
 ├── pages/
+│   ├── 0_Homepage.py        # Weekly Highlight journal (card-based, current ISO week)
 │   ├── 1_Dashboard.py        # Heatmaps, project/tag breakdowns, multi-year views
 │   ├── 2_Retrospect.py       # Year-over-year retrospective charts
 │   └── 3_Chat.py             # Conversational interface with quick-action buttons
@@ -51,6 +52,7 @@ toggl-api/
 | **Synthetic IDs** via SHA-256 hash of `start\|stop\|description\|project\|duration` | CSV export has no `Id` column. `stop_iso` added in A8 to prevent collisions. |
 | **Auto-sync on cold start** | Streamlit Cloud has ephemeral filesystems. App detects empty DB and runs full sync automatically. |
 | **`st.secrets` fallback** | `toggl_client.py` checks `st.secrets["TOGGL_API_TOKEN"]` first, then falls back to `os.getenv`. Works on both local and Streamlit Cloud. |
+| **`st.navigation` API for routing** | Entrypoint must remain `app.py` (Streamlit Cloud cannot change Main file path post-deploy). `st.navigation` + `st.Page` lets us set custom sidebar labels (e.g. "Homepage") without renaming the file. Replaces `pages/` auto-discovery. |
 | **No AI API yet** | Architecture ready -- `queries.py` `answer_question()` is the extension point for Claude/Gemini integration later. |
 | **Streamlit Community Cloud** (not Firebase) | Simplest deployment for a Streamlit app. Free tier sufficient. |
 
@@ -91,34 +93,46 @@ toggl-api/
 | B14 | Add "top tags" query handler | Done |
 | B15 | Update help text + onboarding with all query types | Done |
 
-### Phase C: Deployment -- IN PROGRESS
+### Phase C: Deployment -- COMPLETE
 
 | # | Task | Status |
 |---|---|---|
 | C16 | Git init + first commit | Done |
 | C17 | Push to GitHub | Done |
-| C18 | Deploy on Streamlit Community Cloud | **In Progress** |
-| C19 | Verify deployment works end-to-end | Pending |
+| C18 | Deploy on Streamlit Community Cloud | Done |
+| C19 | Verify deployment works end-to-end | Done |
+
+### Phase D: Homepage Redesign -- COMPLETE
+
+| # | Task | Status |
+|---|---|---|
+| D20 | Strip old homepage (all-time stats, charts, plotly) | Done |
+| D21 | Build card-based weekly Highlight journal | Done |
+| D22 | Fix deprecated `titlefont` → `title_font` in Dashboard (3 occurrences) | Done |
+| D23 | Attempt file rename `app.py` → `Homepage.py` (broke Streamlit Cloud) | Done (reverted) |
+| D24 | Delete invalid `.streamlit/pages.toml` (not a real Streamlit feature) | Done |
+| D25 | Restructure to `st.navigation` API for custom sidebar labels | Done |
 
 ---
 
 ## Current State (where we left off)
 
 ### What just happened
-1. Completed B15: Updated `3_Chat.py` onboarding message with all 12 query types organized in 3 categories + added 2 new quick-action buttons (Top Projects, Top Tags).
-2. Completed C16-C17: Initialized git repo, made initial commit (14 files, 2,715 lines), pushed to GitHub.
-3. Added `st.secrets` fallback in `toggl_client.py` and `app.py` for Streamlit Cloud compatibility.
-4. Changed repo from private to public (Streamlit Cloud couldn't find private repo).
-5. Skipped local DB re-sync (cloud deployment will auto-sync with corrected IDs on cold start).
+1. Completed Phase D: Redesigned the homepage as a card-based weekly Highlight journal.
+2. Restructured the app to use `st.navigation` API (Streamlit 1.52+):
+   - `app.py` is now a thin router: `st.set_page_config` → `apply_theme()` → `st.navigation()` (4 pages) → shared sidebar sync controls → `pg.run()`.
+   - Homepage content moved to `pages/0_Homepage.py`.
+   - Removed `st.set_page_config` from all page files (`1_Dashboard.py`, `2_Retrospect.py`, `3_Chat.py`) -- the router owns page config.
+3. Sidebar nav now shows "Homepage" (not "app") as the first item.
+4. Fixed deprecated Plotly `titlefont` → `title_font` in `pages/1_Dashboard.py`.
+5. Discovered Streamlit Cloud limitation: cannot change "Main file path" after deployment. Reverted a file rename that broke the deployment.
+6. Discovered `pages.toml` is not a real Streamlit feature -- deleted it.
+7. All changes pushed to `origin/master`.
 
 ### What needs to happen next
-1. **C18: Deploy on Streamlit Community Cloud** -- User is currently deploying. Steps:
-   - Go to [share.streamlit.io](https://share.streamlit.io), sign in with GitHub
-   - New app > `tah-allotrope/toggl-api`, branch `master`, main file `app.py`
-   - Advanced settings > add secret: `TOGGL_API_TOKEN = "88e42840e75d373a6fd9fa3f0ddd5fb3"`
-   - Deploy
-2. **C19: Verify deployment** -- First load takes 1-2 min (auto-sync). Check all 4 pages work.
-3. **Future: AI integration** -- `queries.py` `answer_question()` is the extension point.
+1. **Verify Streamlit Cloud deployment** -- The push should trigger auto-redeploy. Check that all 4 pages load correctly with the new `st.navigation` routing.
+2. **Future: AI integration** -- `queries.py` `answer_question()` is the extension point for Claude/Gemini.
+3. **Future: Additional homepage enhancements** -- e.g. previous week navigation, daily summaries, tag filtering.
 
 ---
 
@@ -128,6 +142,8 @@ toggl-api/
 - **LSP false positives:** pandas type stubs cause warnings on `.rename(columns=...)`, `sort_values(ascending=False)`, `.nunique()`, `.notna()`, `.groupby()` on DataFrames from groupby/filter chains. These are NOT runtime errors.
 - **Rate limiter stale timestamps:** If a sync is interrupted, the `RateLimiter` class can retain stale timestamps that block subsequent requests for the full hourly quota. The initial bulk sync was done with raw `requests` to work around this.
 - **Streamlit Cloud ephemeral filesystem:** The SQLite DB is lost on every cold start. Auto-sync (A7) handles this, but first load always takes ~1-2 minutes.
+- **Streamlit Cloud cannot change Main file path:** Once deployed, the entrypoint filename is locked. The file must remain `app.py`. Use `st.navigation` API to customize sidebar labels instead.
+- **`pages.toml` is NOT a Streamlit feature:** Creating `.streamlit/pages.toml` does nothing. Was attempted and deleted.
 
 ---
 
@@ -157,6 +173,10 @@ The pattern-matching engine supports 12 query types:
 ## Git Log
 
 ```
+291ac90 Restructure to st.navigation API for custom sidebar labels
+d27e88e Added Dev Container Folder
+f1a701e Redesign homepage as weekly Highlight journal
+f90ac09 Add activeContext.md documenting project state and progress
 8f40690 Add st.secrets fallback for Streamlit Cloud deployment
 ee514fa Initial commit: Toggl time tracking dashboard with cyberpunk neon theme
 ```
