@@ -11,13 +11,38 @@ Run with:  streamlit run app.py
 import streamlit as st
 from datetime import date
 import time
+import os
+
+is_authenticated = st.session_state.get("authenticated", False)
 
 st.set_page_config(
     page_title="Toggl Time Journal",
-    page_icon="\u23f0",
+    page_icon="⏱️",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="expanded" if is_authenticated else "collapsed",
 )
+
+if not is_authenticated:
+    st.markdown(
+        """
+        <style>
+            [data-testid="collapsedControl"] { display: none; }
+            [data-testid="stSidebar"] { display: none; }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.title("Login Required")
+    with st.form("login_form"):
+        pwd = st.text_input("Password", type="password")
+        if st.form_submit_button("Login"):
+            if pwd == os.getenv("DASHBOARD_PASSWORD", "290391"):
+                st.session_state["authenticated"] = True
+                st.rerun()
+            else:
+                st.error("Incorrect password")
+    st.stop()
+
 
 from src.theme import apply_theme
 apply_theme()
