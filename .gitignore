@@ -4,3 +4,5 @@ __pycache__/
 *.pyc
 *.db
 .streamlit/secrets.toml
+streamlit.log
+.claude/

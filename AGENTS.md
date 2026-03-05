@@ -22,33 +22,32 @@ No test framework. No linter. No type checker configured.
 ## Architecture
 
 - 4 Streamlit pages behind `st.navigation` (Homepage, Dashboard, Retrospect, Chat)
-- API client with sliding-window rate limiter (30 req/hr free tier)
-- Sync engine: API → JSON archives → SQLite with derived columns
-- Pattern-matching chat engine (regex-routed, designed for future AI integration)
+- API client with sliding-window rate limiter (auto-detects Premium 600 req/hr from headers)
+- Sync engine: CSV sync (fast, 1 call/year) + JSON enrichment sync (full field set, Premium)
+- Pattern-matching chat engine (regex-routed, supports projects/tags/clients/tasks)
 - Theme system: CSS injection + custom Plotly template
+- Password-protected login via `DASHBOARD_PASSWORD`
+
+## Data Model
+
+- **time_entries**: core table with enrichment columns (toggl_id, project_id, tag_ids, task_name, client_name, user_id)
+- **projects**: with Premium fields (rate, currency, fixed_fee, estimated_hours)
+- **tags**: with creator_id, at, deleted_at
+- **clients**: id, name, workspace_id, archived
+- **tasks**: Premium task assignments per project
+- **sync_meta**: key-value store for sync timestamps
 
 ## Conventions
 
 - Type hints on all public functions
 - Module-level docstrings on every `.py` file
 - Tags stored as JSON arrays in SQLite
-- Synthetic entry IDs via SHA-256 hash of `start|stop|description|project|duration`
+- Native Toggl IDs used post-enrichment; synthetic SHA-256 IDs for CSV-only entries
+- `managed_connection()` context manager preferred for short-lived DB access
 
 ## Environment
 
-- Requires `TOGGL_API_TOKEN` (see `.env.example`)
+- Requires `TOGGL_API_TOKEN` and `DASHBOARD_PASSWORD` (see `.env.example`)
 - Deployed on Streamlit Community Cloud (ephemeral filesystem — app auto-syncs on cold start)
+- Enriched data lost on cold start; must re-run enrichment sync manually
 - `data/` directory is gitignored
-
-## Known Issues
-
-- `conn.close()` called twice in sync engine (latent bug)
-- RateLimiter can retain stale timestamps if sync is interrupted
-
-## Routing
-
-When these docs exist, read them for domain-specific rules:
-
-- `docs/TESTING.md` — test patterns and fixtures
-- `docs/CONVENTIONS.md` — code style, type checking, linting
-- `docs/SYNC.md` — sync engine internals and Toggl API quirks
