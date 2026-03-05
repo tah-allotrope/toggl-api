@@ -47,7 +47,8 @@ if not is_authenticated:
 from src.theme import apply_theme
 apply_theme()
 
-from src.sync import sync_all, sync_current_year, get_sync_status
+from src.sync import sync_all, sync_current_year, sync_enriched_all, get_sync_status
+from src.data_store import get_connection, get_enrichment_stats
 
 # ---------------------------------------------------------------------------
 # Navigation: declare all pages (replaces pages/ auto-discovery)
@@ -75,6 +76,8 @@ if sync_status["has_data"]:
         st.sidebar.caption(f"Last full sync: {sync_status['last_full_sync'][:16]}")
     if sync_status["last_incremental_sync"]:
         st.sidebar.caption(f"Last quick sync: {sync_status['last_incremental_sync'][:16]}")
+    if sync_status["last_enriched_sync"]:
+        st.sidebar.caption(f"Last enriched sync: {sync_status['last_enriched_sync'][:16]}")
 else:
     st.sidebar.warning("No data yet. Run a full sync to get started.")
 
@@ -122,6 +125,62 @@ with st.sidebar.expander("Full Sync (all years)"):
             st.rerun()
         except Exception as e:
             st.error(f"Sync failed: {e}")
+
+# Enriched sync — pulls full JSON data while on Premium
+with st.sidebar.expander("Enriched Sync (Premium)", expanded=False):
+    st.caption(
+        "Pulls native Toggl IDs, project_id, tag_ids, task data, client names, "
+        "and Premium project fields via the JSON API. "
+        "Requires ~2 hrs on Premium (600 req/hr). "
+        "Enriched data persists after Premium expires."
+    )
+
+    # Show current enrichment coverage if data exists
+    if sync_status["has_data"]:
+        try:
+            _conn = get_connection()
+            _stats = get_enrichment_stats(_conn)
+            _conn.close()
+            _pct = (
+                int(100 * _stats["enriched_entries"] / _stats["total_entries"])
+                if _stats["total_entries"] > 0 else 0
+            )
+            st.progress(_pct / 100, text=f"{_pct}% enriched ({_stats['enriched_entries']:,}/{_stats['total_entries']:,} entries)")
+            if _stats["total_tasks"] > 0:
+                st.caption(f"{_stats['total_tasks']} tasks · {_stats['total_clients']} clients stored")
+        except Exception:
+            pass
+
+    earliest_e = st.number_input(
+        "Earliest year", min_value=2006, max_value=date.today().year, value=2017,
+        key="enriched_earliest",
+    )
+    if st.button("Run Enriched Sync", use_container_width=True, type="secondary"):
+        try:
+            from src.toggl_client import TogglClient
+            client = TogglClient()
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+
+            def on_enrich_progress(msg, frac):
+                status_text.text(msg)
+                progress_bar.progress(min(frac, 1.0))
+
+            result = sync_enriched_all(
+                client,
+                earliest_year=int(earliest_e),
+                progress_callback=on_enrich_progress,
+            )
+            st.success(
+                f"Enriched {result['total_entries']:,} entries across {result['years_enriched']} years "
+                f"({result['tasks']} tasks, {result['clients']} clients)"
+            )
+            if result["errors"]:
+                st.warning(f"{len(result['errors'])} year(s) failed: {', '.join(result['errors'])}")
+            time.sleep(1.5)
+            st.rerun()
+        except Exception as e:
+            st.error(f"Enriched sync failed: {e}")
 
 # ---------------------------------------------------------------------------
 # Run the selected page
