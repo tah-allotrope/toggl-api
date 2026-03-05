@@ -28,6 +28,7 @@ conn = get_connection()
 years = get_available_years(conn)
 
 if not years:
+    conn.close()
     st.warning("No data available. Please run a sync from the home page.")
     st.stop()
 
@@ -103,14 +104,21 @@ with tab_day:
                 f"{int(year_val)} -- {total_h:.1f} hours, {len(year_entries)} entries",
                 expanded=(year_val == df_day["start_year"].max()),
             ):
-                display_df = year_entries[["start", "description", "project_name", "duration_hours", "tags"]].copy()
-                display_df = display_df.rename(columns={
+                display_cols = ["start", "description", "project_name", "duration_hours", "tags"]
+                rename_map = {
                     "start": "Start Time",
                     "description": "Description",
                     "project_name": "Project",
                     "duration_hours": "Hours",
                     "tags": "Tags",
-                })
+                }
+                if "task_name" in year_entries.columns:
+                    has_tasks = year_entries["task_name"].notna() & (year_entries["task_name"] != "")
+                    if has_tasks.any():
+                        display_cols.insert(4, "task_name")
+                        rename_map["task_name"] = "Task"
+                display_df = year_entries[display_cols].copy()
+                display_df = display_df.rename(columns=rename_map)
                 display_df["Start Time"] = pd.to_datetime(display_df["Start Time"]).dt.strftime("%H:%M")
                 display_df["Hours"] = display_df["Hours"].round(2)
                 st.dataframe(display_df, use_container_width=True, hide_index=True)

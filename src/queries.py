@@ -13,9 +13,10 @@ from datetime import date, datetime, timedelta
 import pandas as pd
 
 from src.data_store import (
-    get_connection, get_entries_df, get_entries_for_date_across_years,
+    managed_connection, get_entries_df, get_entries_for_date_across_years,
     get_entries_for_week_across_years, get_total_stats, get_available_years,
     search_entries, get_entries_by_tag, get_all_project_names, get_all_tag_names,
+    get_all_client_names,
 )
 
 # Month name -> number mapping
@@ -40,6 +41,18 @@ def _fuzzy_match_project(name: str, known_projects: list[str]) -> str | None:
     return None
 
 
+def _fuzzy_match_client(name: str, known_clients: list[str]) -> str | None:
+    """Case-insensitive match of user input against known client names."""
+    lower = name.lower().strip()
+    for c in known_clients:
+        if c.lower() == lower:
+            return c
+    for c in known_clients:
+        if lower in c.lower() or c.lower() in lower:
+            return c
+    return None
+
+
 def _fuzzy_match_tag(name: str, known_tags: list[str]) -> str | None:
     """Case-insensitive match of user input against known tag names."""
     lower = name.lower().strip()
@@ -58,135 +71,165 @@ def answer_question(question: str) -> str:
     Falls back to a help message if the question can't be parsed.
     """
     q = question.lower().strip()
-    conn = get_connection()
 
-    try:
-        known_projects = get_all_project_names(conn)
-        known_tags = get_all_tag_names(conn)
+    with managed_connection() as conn:
+        return _dispatch_question(q, conn)
 
-        # ----- "top projects" / "top tags" / "biggest projects" -----
-        if any(kw in q for kw in ["top project", "biggest project", "most project",
-                                   "best project", "main project"]):
-            year_match = re.search(r'\b(20\d{2})\b', q)
-            year_val = int(year_match.group(1)) if year_match else None
-            return _answer_top_projects(conn, year_val)
 
-        if any(kw in q for kw in ["top tag", "biggest tag", "most tag",
-                                   "best tag", "main tag", "what tag"]):
-            year_match = re.search(r'\b(20\d{2})\b', q)
-            year_val = int(year_match.group(1)) if year_match else None
-            return _answer_top_tags(conn, year_val)
+def _dispatch_question(q: str, conn) -> str:
+    known_projects = get_all_project_names(conn)
+    known_tags = get_all_tag_names(conn)
+    known_clients = get_all_client_names(conn)
 
-        # ----- tag-specific queries: "tagged X", "tag X", "hours on tag X" -----
-        tag_match = re.search(
-            r'(?:tagged|tag)\s+["\']?(.+?)["\']?(?:\s+in\s+(20\d{2}))?$', q
-        )
-        if tag_match:
-            tag_name = tag_match.group(1).strip()
-            year_val = int(tag_match.group(2)) if tag_match.group(2) else None
-            matched_tag = _fuzzy_match_tag(tag_name, known_tags)
-            if matched_tag:
-                return _answer_tag(conn, matched_tag, year_val)
-            return f"No tag matching '{tag_name}' found. Known tags: {', '.join(known_tags)}"
-
-        # ----- "what did I do on <date>" -----
-        date_match = re.search(
-            r'(?:on|for)\s+(?:(\w+)\s+(\d{1,2})(?:st|nd|rd|th)?(?:[,\s]+(\d{4}))?)',
-            q
-        )
-        if date_match:
-            month_str, day_str, year_str = date_match.groups()
-            month_num = MONTH_MAP.get(month_str.lower())
-            if month_num:
-                day_num = int(day_str)
-                if year_str:
-                    return _answer_specific_date(conn, int(year_str), month_num, day_num)
-                else:
-                    return _answer_date_across_years(conn, month_num, day_num)
-
-        # ----- "this week" / "last week" / "week <n>" -----
-        if "this week" in q:
-            week_num = date.today().isocalendar()[1]
-            return _answer_week(conn, week_num)
-        if "last week" in q:
-            week_num = (date.today() - timedelta(weeks=1)).isocalendar()[1]
-            return _answer_week(conn, week_num)
-        week_match = re.search(r'week\s*(\d{1,2})', q)
-        if week_match:
-            return _answer_week(conn, int(week_match.group(1)))
-
-        # ----- "today" / "yesterday" -----
-        if "today" in q:
-            today = date.today()
-            return _answer_date_across_years(conn, today.month, today.day)
-        if "yesterday" in q:
-            yesterday = date.today() - timedelta(days=1)
-            return _answer_date_across_years(conn, yesterday.month, yesterday.day)
-
-        # ----- compare years: "compare 2023 and 2024" or "2023 vs 2024" -----
-        compare_match = re.search(r'(?:compare\s+)?(20\d{2})\s+(?:and|vs|to|with|versus)\s+(20\d{2})', q)
-        if compare_match:
-            return _answer_compare(conn, int(compare_match.group(1)), int(compare_match.group(2)))
-
-        # ----- "total" / "overall" / "all time" -- but only if not scoped -----
-        # Check that it's not scoped to a project/tag (e.g. "total on Work")
-        if any(kw in q for kw in ["total", "overall", "how much time", "all time", "lifetime"]):
-            # If the query also mentions a known project, route to project handler
-            for proj in known_projects:
-                if proj.lower() in q:
-                    year_match = re.search(r'\b(20\d{2})\b', q)
-                    year_val = int(year_match.group(1)) if year_match else None
-                    return _answer_project(conn, proj, year_val)
-            # If the query also mentions a known tag, route to tag handler
-            for tag in known_tags:
-                if tag.lower() in q:
-                    year_match = re.search(r'\b(20\d{2})\b', q)
-                    year_val = int(year_match.group(1)) if year_match else None
-                    return _answer_tag(conn, tag, year_val)
-            return _answer_totals(conn)
-
-        # ----- "last <month>" or "in <month> <year>" -----
-        month_match = re.search(r'(?:in|last|for)\s+(\w+)(?:\s+(20\d{2}))?', q)
-        if month_match:
-            month_str = month_match.group(1).lower()
-            month_num = MONTH_MAP.get(month_str)
-            if month_num:
-                year_val = int(month_match.group(2)) if month_match.group(2) else None
-                return _answer_month(conn, month_num, year_val)
-
-        # ----- year-specific questions: "how was 2024" -----
+    # ----- "top projects" / "top tags" / "biggest projects" -----
+    if any(kw in q for kw in ["top project", "biggest project", "most project",
+                               "best project", "main project"]):
         year_match = re.search(r'\b(20\d{2})\b', q)
-        if year_match:
-            return _answer_year(conn, int(year_match.group(1)))
+        year_val = int(year_match.group(1)) if year_match else None
+        return _answer_top_projects(conn, year_val)
 
-        # ----- explicit "project X" prefix -----
-        project_match = re.search(
-            r'(?:project)\s+["\']?(.+?)["\']?(?:\s+in\s+(20\d{2}))?$', q
-        )
-        if project_match:
-            project_name = project_match.group(1).strip()
-            year_val = int(project_match.group(2)) if project_match.group(2) else None
-            matched = _fuzzy_match_project(project_name, known_projects)
-            if matched:
-                return _answer_project(conn, matched, year_val)
-            return f"No project matching '{project_name}'. Known projects: {', '.join(known_projects[:10])}..."
+    if any(kw in q for kw in ["top tag", "biggest tag", "most tag",
+                               "best tag", "main tag", "what tag"]):
+        year_match = re.search(r'\b(20\d{2})\b', q)
+        year_val = int(year_match.group(1)) if year_match else None
+        return _answer_top_tags(conn, year_val)
 
-        # ----- bare project name: check if input matches a known project -----
+    # ----- "top tasks" / "what tasks" -----
+    if any(kw in q for kw in ["top task", "what task", "biggest task", "most task"]):
+        year_match = re.search(r'\b(20\d{2})\b', q)
+        year_val = int(year_match.group(1)) if year_match else None
+        return _answer_top_tasks(conn, year_val)
+
+    # ----- client-specific queries: "client X", "how much time on client X" -----
+    client_match = re.search(
+        r'(?:client)\s+["\']?(.+?)["\']?(?:\s+in\s+(20\d{2}))?$', q
+    )
+    if client_match:
+        client_name = client_match.group(1).strip()
+        year_val = int(client_match.group(2)) if client_match.group(2) else None
+        matched_client = _fuzzy_match_client(client_name, known_clients)
+        if matched_client:
+            return _answer_client(conn, matched_client, year_val)
+        return f"No client matching '{client_name}'. Known clients: {', '.join(known_clients)}"
+
+    # ----- task-specific queries: "task X", "hours on task X" -----
+    task_match = re.search(
+        r'(?:task)\s+["\']?(.+?)["\']?(?:\s+in\s+(20\d{2}))?$', q
+    )
+    if task_match:
+        task_name = task_match.group(1).strip()
+        year_val = int(task_match.group(2)) if task_match.group(2) else None
+        return _answer_task(conn, task_name, year_val)
+
+    # ----- tag-specific queries: "tagged X", "tag X", "hours on tag X" -----
+    tag_match = re.search(
+        r'(?:tagged|tag)\s+["\']?(.+?)["\']?(?:\s+in\s+(20\d{2}))?$', q
+    )
+    if tag_match:
+        tag_name = tag_match.group(1).strip()
+        year_val = int(tag_match.group(2)) if tag_match.group(2) else None
+        matched_tag = _fuzzy_match_tag(tag_name, known_tags)
+        if matched_tag:
+            return _answer_tag(conn, matched_tag, year_val)
+        return f"No tag matching '{tag_name}' found. Known tags: {', '.join(known_tags)}"
+
+    # ----- "what did I do on <date>" -----
+    date_match = re.search(
+        r'(?:on|for)\s+(?:(\w+)\s+(\d{1,2})(?:st|nd|rd|th)?(?:[,\s]+(\d{4}))?)',
+        q
+    )
+    if date_match:
+        month_str, day_str, year_str = date_match.groups()
+        month_num = MONTH_MAP.get(month_str.lower())
+        if month_num:
+            day_num = int(day_str)
+            if year_str:
+                return _answer_specific_date(conn, int(year_str), month_num, day_num)
+            else:
+                return _answer_date_across_years(conn, month_num, day_num)
+
+    # ----- "this week" / "last week" / "week <n>" -----
+    if "this week" in q:
+        week_num = date.today().isocalendar()[1]
+        return _answer_week(conn, week_num)
+    if "last week" in q:
+        week_num = (date.today() - timedelta(weeks=1)).isocalendar()[1]
+        return _answer_week(conn, week_num)
+    week_match = re.search(r'week\s*(\d{1,2})', q)
+    if week_match:
+        return _answer_week(conn, int(week_match.group(1)))
+
+    # ----- "today" / "yesterday" -----
+    if "today" in q:
+        today = date.today()
+        return _answer_date_across_years(conn, today.month, today.day)
+    if "yesterday" in q:
+        yesterday = date.today() - timedelta(days=1)
+        return _answer_date_across_years(conn, yesterday.month, yesterday.day)
+
+    # ----- compare years: "compare 2023 and 2024" or "2023 vs 2024" -----
+    compare_match = re.search(r'(?:compare\s+)?(20\d{2})\s+(?:and|vs|to|with|versus)\s+(20\d{2})', q)
+    if compare_match:
+        return _answer_compare(conn, int(compare_match.group(1)), int(compare_match.group(2)))
+
+    # ----- "total" / "overall" / "all time" -- but only if not scoped -----
+    if any(kw in q for kw in ["total", "overall", "how much time", "all time", "lifetime"]):
         for proj in known_projects:
-            if proj.lower() == q or q == proj.lower().rstrip():
-                return _answer_project(conn, proj, None)
+            if proj.lower() in q:
+                year_match = re.search(r'\b(20\d{2})\b', q)
+                year_val = int(year_match.group(1)) if year_match else None
+                return _answer_project(conn, proj, year_val)
+        for tag in known_tags:
+            if tag.lower() in q:
+                year_match = re.search(r'\b(20\d{2})\b', q)
+                year_val = int(year_match.group(1)) if year_match else None
+                return _answer_tag(conn, tag, year_val)
+        for cl in known_clients:
+            if cl.lower() in q:
+                year_match = re.search(r'\b(20\d{2})\b', q)
+                year_val = int(year_match.group(1)) if year_match else None
+                return _answer_client(conn, cl, year_val)
+        return _answer_totals(conn)
 
-        # ----- keyword search -----
-        search_match = re.search(r'(?:search|find|look for|when did i)\s+(.+)', q)
-        if search_match:
-            keyword = search_match.group(1).strip().strip('"\'')
-            return _answer_search(conn, keyword)
+    # ----- "last <month>" or "in <month> <year>" -----
+    month_match = re.search(r'(?:in|last|for)\s+(\w+)(?:\s+(20\d{2}))?', q)
+    if month_match:
+        month_str = month_match.group(1).lower()
+        month_num = MONTH_MAP.get(month_str)
+        if month_num:
+            year_val = int(month_match.group(2)) if month_match.group(2) else None
+            return _answer_month(conn, month_num, year_val)
 
-        # ----- fallback -----
-        return _help_message(known_projects, known_tags)
+    # ----- year-specific questions: "how was 2024" -----
+    year_match = re.search(r'\b(20\d{2})\b', q)
+    if year_match:
+        return _answer_year(conn, int(year_match.group(1)))
 
-    finally:
-        conn.close()
+    # ----- explicit "project X" prefix -----
+    project_match = re.search(
+        r'(?:project)\s+["\']?(.+?)["\']?(?:\s+in\s+(20\d{2}))?$', q
+    )
+    if project_match:
+        project_name = project_match.group(1).strip()
+        year_val = int(project_match.group(2)) if project_match.group(2) else None
+        matched = _fuzzy_match_project(project_name, known_projects)
+        if matched:
+            return _answer_project(conn, matched, year_val)
+        return f"No project matching '{project_name}'. Known projects: {', '.join(known_projects[:10])}..."
+
+    # ----- bare project name: check if input matches a known project -----
+    for proj in known_projects:
+        if proj.lower() == q or q == proj.lower().rstrip():
+            return _answer_project(conn, proj, None)
+
+    # ----- keyword search -----
+    search_match = re.search(r'(?:search|find|look for|when did i)\s+(.+)', q)
+    if search_match:
+        keyword = search_match.group(1).strip().strip('"\'')
+        return _answer_search(conn, keyword)
+
+    # ----- fallback -----
+    return _help_message(known_projects, known_tags)
 
 
 def _answer_totals(conn) -> str:
@@ -428,6 +471,94 @@ def _answer_top_tags(conn, year: int | None) -> str:
     return f"**Top Tags ({scope}):**\n\n" + "\n".join(lines)
 
 
+def _answer_client(conn, client_name: str, year: int | None) -> str:
+    df = get_entries_df(conn, year=year) if year else get_entries_df(conn)
+    mask = df["client_name"].str.lower().str.contains(client_name.lower(), na=False)
+    df = df[mask]
+
+    if df.empty:
+        scope = f" in {year}" if year else ""
+        return f"No entries found for client '{client_name}'{scope}."
+
+    total_h = df["duration_hours"].sum()
+    total_e = len(df)
+    label = f"'{client_name}'" + (f" in {year}" if year else " (all time)")
+
+    top_proj = (
+        df.groupby("project_name")["duration_hours"].sum()
+        .sort_values(ascending=False).head(5)
+    )
+    proj_lines = "\n".join(
+        f"  - {n or '(No Project)'}: {h:.1f}h" for n, h in top_proj.items()
+    )
+
+    return (
+        f"**Client {label}:**\n\n"
+        f"- **Hours:** {total_h:,.1f}\n"
+        f"- **Entries:** {total_e:,}\n"
+        f"- **Date range:** {df['start_date'].min()} to {df['start_date'].max()}\n\n"
+        f"**Projects for this client:**\n{proj_lines}"
+    )
+
+
+def _answer_task(conn, task_name: str, year: int | None) -> str:
+    df = get_entries_df(conn, year=year) if year else get_entries_df(conn)
+    if "task_name" not in df.columns:
+        return "No task data available (requires enrichment sync)."
+
+    mask = df["task_name"].str.lower().str.contains(task_name.lower(), na=False)
+    df = df[mask]
+
+    if df.empty:
+        scope = f" in {year}" if year else ""
+        return f"No entries found for task matching '{task_name}'{scope}."
+
+    total_h = df["duration_hours"].sum()
+    total_e = len(df)
+    label = f"'{task_name}'" + (f" in {year}" if year else " (all time)")
+
+    top_proj = (
+        df.groupby("project_name")["duration_hours"].sum()
+        .sort_values(ascending=False).head(5)
+    )
+    proj_lines = "\n".join(
+        f"  - {n or '(No Project)'}: {h:.1f}h" for n, h in top_proj.items()
+    )
+
+    return (
+        f"**Task {label}:**\n\n"
+        f"- **Hours:** {total_h:,.1f}\n"
+        f"- **Entries:** {total_e:,}\n"
+        f"- **Date range:** {df['start_date'].min()} to {df['start_date'].max()}\n\n"
+        f"**Projects with this task:**\n{proj_lines}"
+    )
+
+
+def _answer_top_tasks(conn, year: int | None) -> str:
+    df = get_entries_df(conn, year=year) if year else get_entries_df(conn)
+    if df.empty or "task_name" not in df.columns:
+        return "No task data available."
+
+    tasks_df = df[df["task_name"].notna() & (df["task_name"] != "")]
+    if tasks_df.empty:
+        return "No task data found (requires enrichment sync)."
+
+    top = (
+        tasks_df.groupby("task_name")
+        .agg(hours=("duration_hours", "sum"), entries=("id", "count"))
+        .sort_values("hours", ascending=False)
+        .head(10)
+        .reset_index()
+    )
+
+    scope = str(year) if year else "All Time"
+    lines = []
+    for _, row in top.iterrows():
+        lines.append(f"  - **{row['task_name']}:** {row['hours']:,.1f}h -- {row['entries']} entries")
+
+    return f"**Top Tasks ({scope}):**\n\n" + "\n".join(lines)
+
+
 def _answer_search(conn, keyword: str) -> str:
     df = search_entries(conn, keyword, limit=20)
     if df.empty:
@@ -473,7 +604,7 @@ def _answer_compare(conn, year_a: int, year_b: int) -> str:
 def _help_message(known_projects: list[str] | None = None,
                   known_tags: list[str] | None = None) -> str:
     proj_examples = ""
-    if known_projects:
+    if known_projects and len(known_projects) >= 2:
         proj_examples = f' (e.g. "{known_projects[0]}", "{known_projects[1]}")'
 
     tag_examples = ""
@@ -490,9 +621,11 @@ def _help_message(known_projects: list[str] | None = None,
         '- **"In February 2024"** -- Monthly summary\n'
         '- **"Total hours"** -- All-time stats\n'
         f'- **"Top projects"** / **"Top projects in 2024"** -- Project ranking\n'
-        f'- **"Top tags"** -- Tag ranking\n'
+        f'- **"Top tags"** / **"Top tasks"** -- Tag or task ranking\n'
         f'- **Project name directly**{proj_examples} -- Project details\n'
         f'- **"Tag Highlight"** / **"Tagged Deep in 2024"**{tag_examples} -- Tag details\n'
+        '- **"Client X"** / **"Client X in 2024"** -- Client breakdown\n'
+        '- **"Task X"** / **"Hours on task X"** -- Task details\n'
         '- **"Search meditation"** -- Keyword search across descriptions, projects, and tags\n\n'
         "For AI-powered analysis, an AI API integration can be added later."
     )

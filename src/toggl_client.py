@@ -70,6 +70,11 @@ class RateLimiter:
         # Tracks whether we've upgraded the quota ceiling from headers yet.
         self._quota_detected: bool = False
 
+    def clear_stale(self):
+        """Remove timestamps older than 1 hour. Call at the start of each year's fetch."""
+        one_hour_ago = time.time() - 3600
+        self._timestamps = [t for t in self._timestamps if t > one_hour_ago]
+
     def update_from_headers(self, headers: dict):
         """
         Parse Toggl quota headers from an API response and update the hourly
@@ -590,6 +595,8 @@ class TogglClient:
         today = date.today()
         end = f"{year}-12-31" if year < today.year else today.isoformat()
         start = f"{year}-01-01"
+
+        self._limiter.clear_stale()
 
         wid = workspace_id or self.get_workspace_id()
         rows = self.get_all_detailed_entries(start, end, workspace_id=wid)

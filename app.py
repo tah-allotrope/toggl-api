@@ -145,11 +145,21 @@ with st.sidebar.expander("Enriched Sync (Premium)", expanded=False):
                 int(100 * _stats["enriched_entries"] / _stats["total_entries"])
                 if _stats["total_entries"] > 0 else 0
             )
-            st.progress(_pct / 100, text=f"{_pct}% enriched ({_stats['enriched_entries']:,}/{_stats['total_entries']:,} entries)")
-            if _stats["total_tasks"] > 0:
+            st.metric(
+                "Enrichment Coverage",
+                f"{_stats['enriched_entries']:,} / {_stats['total_entries']:,} ({_pct}%)",
+            )
+            if sync_status["last_enriched_sync"]:
+                st.caption(f"Last enriched: {sync_status['last_enriched_sync'][:16]}")
+            if _stats["total_tasks"] > 0 or _stats["total_clients"] > 0:
                 st.caption(f"{_stats['total_tasks']} tasks · {_stats['total_clients']} clients stored")
         except Exception:
             pass
+
+    st.caption(
+        "Note: Streamlit Cloud has an ephemeral filesystem. "
+        "Enriched data is lost on cold start and must be re-synced manually."
+    )
 
     earliest_e = st.number_input(
         "Earliest year", min_value=2006, max_value=date.today().year, value=2017,

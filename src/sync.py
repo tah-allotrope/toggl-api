@@ -291,6 +291,74 @@ def sync_enriched_all(
     }
 
 
+def sync_enriched_current_year(
+    client: TogglClient,
+    progress_callback: Callable[[str, float], None] | None = None,
+) -> dict:
+    """
+    Incremental enrichment: re-fetch only the current year's entries via JSON.
+    Useful for keeping enriched data current without a full multi-hour re-run.
+    """
+    DATA_RAW_DIR.mkdir(parents=True, exist_ok=True)
+    conn = get_connection()
+    wid = client.get_workspace_id()
+    year = date.today().year
+
+    def report(msg: str, frac: float):
+        if progress_callback:
+            progress_callback(msg, frac)
+        print(msg)
+
+    report("Fetching metadata...", 0.0)
+    clients = client.get_clients(wid)
+    upsert_clients(conn, clients)
+    client_map = {c["id"]: c.get("name", "") for c in clients}
+
+    projects = client.get_projects(wid)
+    upsert_projects(conn, projects)
+    project_map = {p["id"]: p.get("name", "") for p in projects}
+
+    tags = client.get_tags(wid)
+    upsert_tags(conn, tags)
+    tag_map = {t["id"]: t.get("name", "") for t in tags}
+
+    all_tasks = client.get_all_tasks(projects, workspace_id=wid)
+    upsert_tasks(conn, all_tasks)
+    task_map = {t["id"]: t.get("name", "") for t in all_tasks}
+
+    report(f"Enriching {year} entries (JSON)...", 0.3)
+    entries = client.fetch_year_entries_json(
+        year,
+        tag_map=tag_map,
+        task_map=task_map,
+        client_map=client_map,
+        workspace_id=wid,
+    )
+
+    for e in entries:
+        if not e.get("project_name") and e.get("project_id"):
+            e["project_name"] = project_map.get(e["project_id"], "")
+
+    raw_path = DATA_RAW_DIR / f"{year}_enriched.json"
+    with open(raw_path, "w", encoding="utf-8") as f:
+        json.dump(entries, f, indent=2, ensure_ascii=False)
+
+    upsert_time_entries(conn, entries)
+
+    now = datetime.now(tz=None).isoformat()
+    set_sync_meta(conn, "last_enriched_sync", now)
+
+    conn.close()
+    report("Enrichment sync complete!", 1.0)
+
+    return {
+        "year": year,
+        "entries": len(entries),
+        "tasks": len(all_tasks),
+        "clients": len(clients),
+    }
+
+
 def get_sync_status() -> dict:
     """Return information about when the last sync happened."""
     conn = get_connection()

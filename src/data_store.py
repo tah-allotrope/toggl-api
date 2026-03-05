@@ -12,6 +12,7 @@ data loss on first run after this change.
 import sqlite3
 import json
 import os
+from contextlib import contextmanager
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -30,6 +31,16 @@ def get_connection() -> sqlite3.Connection:
     _create_tables(conn)
     _apply_migrations(conn)
     return conn
+
+
+@contextmanager
+def managed_connection():
+    """Context manager that auto-closes the connection on exit."""
+    conn = get_connection()
+    try:
+        yield conn
+    finally:
+        conn.close()
 
 
 def _create_tables(conn: sqlite3.Connection):
@@ -420,12 +431,15 @@ def get_sync_meta(conn: sqlite3.Connection, key: str) -> str | None:
 # ---------------------------------------------------------------------------
 
 def get_entries_df(conn: sqlite3.Connection, year: int | None = None,
-                   start_date: str | None = None, end_date: str | None = None) -> pd.DataFrame:
+                   start_date: str | None = None, end_date: str | None = None,
+                   columns: list[str] | None = None) -> pd.DataFrame:
     """
     Return time entries as a Pandas DataFrame, optionally filtered.
     This is the main query method used by all UI pages.
+    Pass `columns` to select specific columns instead of `*`.
     """
-    query = "SELECT * FROM time_entries WHERE duration > 0"
+    col_expr = ", ".join(columns) if columns else "*"
+    query = f"SELECT {col_expr} FROM time_entries WHERE duration > 0"
     params: list = []
 
     if year:
@@ -566,9 +580,30 @@ def search_entries(conn: sqlite3.Connection, keyword: str, limit: int = 200) -> 
 
 def get_entries_by_tag(conn: sqlite3.Connection, tag_name: str,
                        year: int | None = None) -> pd.DataFrame:
-    """Get all entries containing a specific tag (case-insensitive JSON search)."""
-    query = "SELECT * FROM time_entries WHERE tags LIKE ? AND duration > 0"
-    params: list = [f'%"{tag_name}"%']
+    """
+    Get all entries containing a specific tag.
+    Primary: JSON name search on the tags column.
+    Fallback: look up the tag's integer ID and search tag_ids for entries
+    that the name search would miss (e.g. renamed tags).
+    """
+    # Resolve tag ID for fallback search
+    tag_row = conn.execute(
+        "SELECT id FROM tags WHERE name = ? COLLATE NOCASE", (tag_name,)
+    ).fetchone()
+    tag_id_pattern = ""
+    if tag_row:
+        tag_id_pattern = f"%{tag_row['id']}%"
+
+    if tag_id_pattern:
+        query = (
+            "SELECT * FROM time_entries "
+            "WHERE (tags LIKE ? OR tag_ids LIKE ?) AND duration > 0"
+        )
+        params: list = [f'%"{tag_name}"%', tag_id_pattern]
+    else:
+        query = "SELECT * FROM time_entries WHERE tags LIKE ? AND duration > 0"
+        params = [f'%"{tag_name}"%']
+
     if year:
         query += " AND start_year = ?"
         params.append(year)
@@ -593,3 +628,13 @@ def get_all_tag_names(conn: sqlite3.Connection) -> list[str]:
     """Return sorted list of distinct tag names used in time entries."""
     rows = conn.execute("SELECT DISTINCT name FROM tags ORDER BY name").fetchall()
     return [r["name"] for r in rows]
+
+
+def get_all_client_names(conn: sqlite3.Connection) -> list[str]:
+    """Return sorted list of distinct non-empty client names from time entries."""
+    rows = conn.execute(
+        "SELECT DISTINCT client_name FROM time_entries "
+        "WHERE client_name != '' AND client_name IS NOT NULL "
+        "ORDER BY client_name"
+    ).fetchall()
+    return [r["client_name"] for r in rows]

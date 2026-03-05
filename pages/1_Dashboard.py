@@ -23,6 +23,7 @@ conn = get_connection()
 years = get_available_years(conn)
 
 if not years:
+    conn.close()
     st.warning("No data available. Please run a sync from the home page.")
     st.stop()
 
@@ -188,6 +189,157 @@ if "tags_list" in df.columns:
         st.caption("No tagged entries found in this period.")
 else:
     st.caption("No tag data available.")
+
+st.divider()
+
+# ---------------------------------------------------------------------------
+# Client breakdown
+# ---------------------------------------------------------------------------
+
+st.subheader("Time by Client")
+
+if "client_name" in df.columns:
+    client_hours = (
+        df.groupby("client_name")["duration_hours"]
+        .sum()
+        .reset_index()
+        .sort_values("duration_hours", ascending=False)
+    )
+    client_hours.columns = ["Client", "Hours"]
+    client_hours["Client"] = client_hours["Client"].replace("", "(No Client)")
+
+    if not client_hours.empty:
+        fig = px.bar(
+            client_hours.head(20),
+            x="Hours",
+            y="Client",
+            orientation="h",
+            title="Top 20 Clients (hours)",
+            color="Hours",
+            color_continuous_scale=SCALE_CYAN_MAGENTA,
+        )
+        fig.update_traces(
+            marker_line_color=COLORS["cyan"],
+            marker_line_width=0.5,
+        )
+        neon_chart_layout(fig, height=480)
+        fig.update_layout(
+            yaxis=dict(autorange="reversed"),
+            showlegend=False,
+            coloraxis_colorbar=dict(
+                title="Hours",
+                tickfont=dict(color=COLORS["text_muted"]),
+                title_font=dict(color=COLORS["text_muted"]),
+            ),
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.caption("No client data available.")
+else:
+    st.caption("No client data available.")
+
+st.divider()
+
+# ---------------------------------------------------------------------------
+# Task breakdown
+# ---------------------------------------------------------------------------
+
+if "task_name" in df.columns:
+    tasks_df = df[df["task_name"].notna() & (df["task_name"] != "")]
+    if not tasks_df.empty:
+        st.subheader("Time by Task")
+        task_hours = (
+            tasks_df.groupby("task_name")["duration_hours"]
+            .sum()
+            .reset_index()
+            .sort_values("duration_hours", ascending=False)
+        )
+        task_hours.columns = ["Task", "Hours"]
+
+        fig = px.bar(
+            task_hours.head(20),
+            x="Hours",
+            y="Task",
+            orientation="h",
+            title="Top 20 Tasks (hours)",
+            color="Hours",
+            color_continuous_scale=SCALE_MAGENTA_FIRE,
+        )
+        fig.update_traces(
+            marker_line_color=COLORS["magenta"],
+            marker_line_width=0.5,
+        )
+        neon_chart_layout(fig, height=480)
+        fig.update_layout(
+            yaxis=dict(autorange="reversed"),
+            showlegend=False,
+            coloraxis_colorbar=dict(
+                title="Hours",
+                tickfont=dict(color=COLORS["text_muted"]),
+                title_font=dict(color=COLORS["text_muted"]),
+            ),
+        )
+        st.plotly_chart(fig, use_container_width=True)
+        st.divider()
+    else:
+        st.caption("No task data -- requires enrichment sync.")
+        st.divider()
+
+# ---------------------------------------------------------------------------
+# Project detail drill-down
+# ---------------------------------------------------------------------------
+
+st.subheader("Project Detail")
+
+project_list = project_hours["Project"].tolist()
+selected_project = st.selectbox("Select a project", project_list, index=0)
+
+if selected_project:
+    proj_filter = "" if selected_project == "(No Project)" else selected_project
+    proj_df = df[df["project_name"] == proj_filter]
+    if not proj_df.empty:
+        col_m1, col_m2, col_m3 = st.columns(3)
+        col_m1.metric("Total Hours", f"{proj_df['duration_hours'].sum():,.1f}")
+        col_m2.metric("Entries", f"{len(proj_df):,}")
+        col_m3.metric("Date Range", f"{proj_df['start_date'].min()} to {proj_df['start_date'].max()}")
+
+        with st.expander("Top Descriptions", expanded=True):
+            top_desc = (
+                proj_df[proj_df["description"].notna() & (proj_df["description"] != "")]
+                .groupby("description")
+                .agg(count=("id", "count"), hours=("duration_hours", "sum"))
+                .sort_values("hours", ascending=False)
+                .head(15)
+                .reset_index()
+            )
+            top_desc.columns = ["Description", "Entries", "Hours"]
+            st.dataframe(
+                top_desc.style.format({"Hours": "{:.1f}"}),
+                use_container_width=True,
+                hide_index=True,
+            )
+
+        if "task_name" in proj_df.columns:
+            proj_tasks = proj_df[proj_df["task_name"].notna() & (proj_df["task_name"] != "")]
+            if not proj_tasks.empty:
+                with st.expander("Linked Tasks"):
+                    task_summary = (
+                        proj_tasks.groupby("task_name")["duration_hours"]
+                        .sum()
+                        .reset_index()
+                        .sort_values("duration_hours", ascending=False)
+                    )
+                    task_summary.columns = ["Task", "Hours"]
+                    st.dataframe(
+                        task_summary.style.format({"Hours": "{:.1f}"}),
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+
+        if "client_name" in proj_df.columns:
+            client = proj_df["client_name"].iloc[0]
+            if client:
+                st.caption(f"Client: {client}")
 
 st.divider()
 
