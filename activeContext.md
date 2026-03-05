@@ -1,6 +1,6 @@
 # Active Context -- Toggl Time Tracking Dashboard
 
-> Last updated: 2026-02-28 (post st.navigation restructure)
+> Last updated: 2026-03-05 (post data enrichment phase)
 
 ## Project Overview
 
@@ -8,9 +8,10 @@ A Streamlit web dashboard that pulls 8-9 years of personal time tracking data fr
 
 - **Owner:** Tukumalu91 (Toggl), tah-allotrope (GitHub)
 - **Toggl Workspace ID:** 1446622
-- **Data:** 56,585 entries, 10 years (2017-2026), 29 projects, 3 tags, ~54,600 total hours
+- **Data:** 56,696 entries, 10 years (2017-2026), 29 projects, 3 tags — ALL entries now enriched (native Toggl IDs, project_ids, tag_ids, client names, task names)
 - **Stack:** Python 3.14.2, Streamlit, SQLite, Plotly, Pandas
 - **Repo:** https://github.com/tah-allotrope/toggl-api (public)
+- **Active branch:** `feature/data-enrichment-phase`
 
 ---
 
@@ -18,18 +19,18 @@ A Streamlit web dashboard that pulls 8-9 years of personal time tracking data fr
 
 ```
 toggl-api/
-├── .env                      # API token (gitignored)
+├── .env                      # API token + DASHBOARD_PASSWORD (gitignored)
 ├── .env.example              # Template for new users
 ├── .gitignore                # Excludes .env, data/, __pycache__, *.db, .streamlit/secrets.toml
 ├── .streamlit/
 │   └── config.toml           # Dark theme, cyan primary, monospace font
 ├── requirements.txt          # streamlit, requests, plotly, python-dotenv, pandas
-├── app.py                    # Router/entrypoint: st.navigation + shared sidebar sync controls
+├── app.py                    # Router: password auth + st.navigation + sync sidebar (incl. Enriched Sync)
 ├── src/
 │   ├── __init__.py
-│   ├── toggl_client.py       # Toggl API v9 + Reports v3 client with rate limiter
-│   ├── data_store.py         # SQLite CRUD + query functions
-│   ├── sync.py               # Orchestrates CSV export -> SQLite ingestion per year
+│   ├── toggl_client.py       # Toggl API v9 + Reports v3 client; auto-detects Premium quota
+│   ├── data_store.py         # SQLite CRUD + query functions; schema migration; dedup guard
+│   ├── sync.py               # CSV sync (sync_all, sync_current_year) + JSON enrichment (sync_enriched_all)
 │   ├── queries.py            # Pattern-matching chat engine (12 query types)
 │   └── theme.py              # Cyberpunk neon CSS injection + color palette
 ├── pages/
@@ -38,7 +39,7 @@ toggl-api/
 │   ├── 2_Retrospect.py       # Year-over-year retrospective charts
 │   └── 3_Chat.py             # Conversational interface with quick-action buttons
 └── data/
-    ├── raw/                  # Per-year JSON archives (2017-2026)
+    ├── raw/                  # Per-year JSON archives: {year}.json (CSV) + {year}_enriched.json (JSON)
     └── toggl.db              # SQLite database (gitignored)
 ```
 
@@ -49,134 +50,116 @@ toggl-api/
 | Decision | Rationale |
 |---|---|
 | **Reports API v3 CSV export** (not paginated JSON) | 1 API call per year vs. hundreds of paginated requests. Stays well within 30 req/hr free-tier limit. |
-| **Synthetic IDs** via SHA-256 hash of `start\|stop\|description\|project\|duration` | CSV export has no `Id` column. `stop_iso` added in A8 to prevent collisions. |
+| **Synthetic IDs** via SHA-256 hash of `start\|stop\|description\|project\|duration` | CSV export has no `Id` column. Used until enrichment sync replaces them with native Toggl IDs. |
+| **Enrichment sync via Reports API v3 JSON** with `enrich_response=True` | Pulls full field set: native IDs, project_id, tag_ids, task data, client info, `at` timestamp. Only viable during Premium (600 req/hr). Free tier (30 req/hr) would take ~40 hours for 10 years. |
+| **Native Toggl IDs replace synthetic IDs post-enrichment** | `toggl_id` column stores the native integer. `id` (PK) is now also the native integer for enriched rows. |
+| **Migrate in-place** (ALTER TABLE, not parallel tables) | Idempotent `_apply_migrations()` runs on every startup — safe on existing DBs, no-op on new ones. |
+| **Deduplication guard in `upsert_time_entries`** | CSV entries (toggl_id=None) are checked against existing enriched rows on `(start[:19], duration, description)` before insert. Prevents re-duplication after enrichment sync if CSV sync runs again. |
+| **Rate limiter auto-detects Premium quota** | `RateLimiter.update_from_headers()` reads `X-Toggl-Quota-Remaining` and upgrades the ceiling from 30 to 600 req/hr automatically when on Premium. |
+| **Tag hierarchies do not exist in Toggl** | Tags are flat `(id, name)` pairs. Stored with richer metadata: `creator_id`, `at`, `deleted_at`. |
 | **Auto-sync on cold start** | Streamlit Cloud has ephemeral filesystems. App detects empty DB and runs full sync automatically. |
 | **`st.secrets` fallback** | `toggl_client.py` checks `st.secrets["TOGGL_API_TOKEN"]` first, then falls back to `os.getenv`. Works on both local and Streamlit Cloud. |
-| **`st.navigation` API for routing** | Entrypoint must remain `app.py` (Streamlit Cloud cannot change Main file path post-deploy). `st.navigation` + `st.Page` lets us set custom sidebar labels (e.g. "Homepage") without renaming the file. Replaces `pages/` auto-discovery. |
-| **No AI API yet** | Architecture ready -- `queries.py` `answer_question()` is the extension point for Claude/Gemini integration later. |
-| **Streamlit Community Cloud** (not Firebase) | Simplest deployment for a Streamlit app. Free tier sufficient. |
+| **`st.navigation` API for routing** | Entrypoint must remain `app.py`. `st.navigation` + `st.Page` lets us set custom sidebar labels. |
+| **Password Protection** | Simple session-based password check in `app.py`. Uses `st.form` for Enter-to-submit. Custom CSS hides sidebar during login. |
 
 ---
 
 ## Toggl Data Profile
 
-- **Projects (29):** Work, Home, Linh, Kin, Leisure, Health, Wealth, Intellect, Project Management, Housing, Wedding, Development, Prenatal, CompSus, and more. ~12,098h has "(No Project)".
-- **Tags (3):** Highlight (3,443 entries), Deep (126), Grind (19). Some entries have multiple tags (e.g. `["Deep", "Highlight"]`).
-- **Tags stored as:** JSON arrays in SQLite (e.g. `["Highlight"]`).
+- **Projects (29):** Work, Home, Linh, Kin, Leisure, Health, Wealth, Intellect, Project Management, Housing, Wedding, Development, Prenatal, CompSus, Agentic (formerly "Academic"), and more. ~12,098h has "(No Project)".
+- **Tags (3):** Highlight (3,443 entries), Deep (126), Grind (19). Some entries have multiple tags.
+- **Tags stored as:** JSON arrays in SQLite (e.g. `["Highlight"]`). Tag IDs also stored in `tag_ids` column after enrichment.
+- **Timezone:** User is UTC+7. CSV exports return naive local time (`2025-01-07T07:40:02`). JSON API returns tz-aware (`2025-01-07T07:40:02+07:00`).
+
+---
+
+## Schema: time_entries
+
+| Column | Source | Notes |
+|---|---|---|
+| `id` | PK | Native Toggl integer for enriched rows; synthetic SHA-256 for CSV-only rows |
+| `toggl_id` | Enrichment | Native Toggl entry ID; UNIQUE, NULL for CSV-only rows |
+| `start`, `stop` | Both | ISO 8601 string; tz-aware for JSON, naive for CSV |
+| `duration` | Both | Seconds |
+| `description` | Both | |
+| `project_id` | Enrichment | NULL for CSV-only rows |
+| `project_name` | Both | Denormalized. "Academic" in CSV = "Agentic" in enriched (project was renamed) |
+| `workspace_id` | Both | |
+| `tags` | Both | JSON array of tag names |
+| `tag_ids` | Enrichment | JSON array of tag IDs; `[]` for CSV-only rows |
+| `billable` | Both | 0/1 |
+| `at` | Enrichment | Last-modified timestamp; empty for CSV-only rows |
+| `start_date`, `start_year`, `start_month`, `start_day`, `start_week` | Derived | Extracted from `start` |
+| `duration_hours` | Derived | `duration / 3600.0` |
+| `task_id`, `task_name` | Enrichment | NULL/empty for CSV-only rows |
+| `client_name` | Enrichment | Denormalized via project→client chain |
+| `user_id` | Enrichment | NULL for CSV-only rows |
 
 ---
 
 ## Execution Plan & Status
 
-### Phase A: Bug Fixes & Polish -- COMPLETE
+### Phase A-E: COMPLETE
+
+*(Phase A: Bug Fixes, Phase B: Chat Engine, Phase C: Deployment, Phase D: Homepage Redesign, Phase E: Password Protection)*
+
+### Phase F: Data Enrichment -- COMPLETE
 
 | # | Task | Status |
 |---|---|---|
-| A1 | Fix heatmap ISO week/year mismatch | Done |
-| A2 | Fill missing weeks in heatmap grid | Done |
-| A3 | Multi-year heatmap in "All Time" mode (small multiples) | Done |
-| A4 | Extend NEON_SEQUENCE to 15+ colors | Done |
-| A5 | Per-year error handling in sync loop | Done |
-| A6 | Fix st.rerun() hiding success message | Done |
-| A7 | Auto-sync on cold start for Streamlit Cloud | Done |
-| A8 | Include stop_iso in synthetic ID to prevent collisions | Done |
-
-### Phase B: Chat Engine Improvements -- COMPLETE
-
-| # | Task | Status |
-|---|---|---|
-| B9 | Add "top projects" query handler | Done |
-| B10 | Add tag query support + get_entries_by_tag | Done |
-| B11 | Fuzzy project name matching without "project" prefix | Done |
-| B12 | Fix greedy "total" keyword intercepting scoped queries | Done |
-| B13 | Expand search_entries to search tags + project_name | Done |
-| B14 | Add "top tags" query handler | Done |
-| B15 | Update help text + onboarding with all query types | Done |
-
-### Phase C: Deployment -- COMPLETE
-
-| # | Task | Status |
-|---|---|---|
-| C16 | Git init + first commit | Done |
-| C17 | Push to GitHub | Done |
-| C18 | Deploy on Streamlit Community Cloud | Done |
-| C19 | Verify deployment works end-to-end | Done |
-
-### Phase D: Homepage Redesign -- COMPLETE
-
-| # | Task | Status |
-|---|---|---|
-| D20 | Strip old homepage (all-time stats, charts, plotly) | Done |
-| D21 | Build card-based weekly Highlight journal | Done |
-| D22 | Fix deprecated `titlefont` → `title_font` in Dashboard (3 occurrences) | Done |
-| D23 | Attempt file rename `app.py` → `Homepage.py` (broke Streamlit Cloud) | Done (reverted) |
-| D24 | Delete invalid `.streamlit/pages.toml` (not a real Streamlit feature) | Done |
-| D25 | Restructure to `st.navigation` API for custom sidebar labels | Done |
+| F1 | Rewrite `toggl_client.py`: rate limiter auto-detection, JSON fetch methods, enhanced flatten | Done |
+| F2 | Rewrite `data_store.py`: schema migration, new tables (clients, tasks), enriched upserts | Done |
+| F3 | Rewrite `sync.py`: `sync_enriched_all()`, fix double `conn.close()` bug | Done |
+| F4 | Update `app.py`: Enriched Sync sidebar expander with progress bar | Done |
+| F5 | Run enrichment sync: pulled all 10 years via JSON API, stored `{year}_enriched.json` | Done |
+| F6 | Diagnose & fix deduplication: 56,555 CSV rows deleted, 56,696 enriched rows remain | Done |
+| F7 | Implement dedup guard in `upsert_time_entries` to prevent future re-duplication | Done |
 
 ---
 
-## Current State (where we left off)
+## Current State
 
-### What just happened
-1. Completed Phase D: Redesigned the homepage as a card-based weekly Highlight journal.
-2. Restructured the app to use `st.navigation` API (Streamlit 1.52+):
-   - `app.py` is now a thin router: `st.set_page_config` → `apply_theme()` → `st.navigation()` (4 pages) → shared sidebar sync controls → `pg.run()`.
-   - Homepage content moved to `pages/0_Homepage.py`.
-   - Removed `st.set_page_config` from all page files (`1_Dashboard.py`, `2_Retrospect.py`, `3_Chat.py`) -- the router owns page config.
-3. Sidebar nav now shows "Homepage" (not "app") as the first item.
-4. Fixed deprecated Plotly `titlefont` → `title_font` in `pages/1_Dashboard.py`.
-5. Discovered Streamlit Cloud limitation: cannot change "Main file path" after deployment. Reverted a file rename that broke the deployment.
-6. Discovered `pages.toml` is not a real Streamlit feature -- deleted it.
-7. All changes pushed to `origin/master`.
+### What just happened (Phase F)
+
+1. Created branch `feature/data-enrichment-phase`.
+2. Rewrote `toggl_client.py`, `data_store.py`, `sync.py` to add enrichment sync path.
+3. Ran enrichment sync: 10 years of entries fetched via Reports API v3 JSON with `enrich_response=True`.
+4. Discovered duplication: enriched rows (native IDs) and CSV rows (synthetic IDs) both survived because PKs differed.
+5. Diagnosed 56,555 CSV duplicates — all had enriched counterparts. 387 "Academic" vs "Agentic" differences traced to a project rename (not missing data).
+6. Deleted all 56,555 CSV rows. DB now has 56,696 clean enriched rows.
+7. Added dedup guard to `upsert_time_entries`: CSV entries are skipped if an enriched counterpart already exists.
 
 ### What needs to happen next
-1. **Verify Streamlit Cloud deployment** -- The push should trigger auto-redeploy. Check that all 4 pages load correctly with the new `st.navigation` routing.
-2. **Future: AI integration** -- `queries.py` `answer_question()` is the extension point for Claude/Gemini.
-3. **Future: Additional homepage enhancements** -- e.g. previous week navigation, daily summaries, tag filtering.
+
+1. **Merge `feature/data-enrichment-phase` to master** and push to deploy.
+2. **On Streamlit Cloud cold start:** enrichment sync won't run automatically (too slow for Free tier). The CSV sync runs first; the dedup guard ensures enriched rows won't be doubled if enrichment is later re-run manually.
+3. **Future: AI integration** — Gemini/Claude integration via `queries.py`, now possible with richer data (task names, client names, native IDs).
 
 ---
 
 ## Known Issues & Caveats
 
-- **Local DB has stale IDs:** The synthetic ID formula changed in A8 (added `stop_iso`). The local `data/toggl.db` still has old IDs. Incremental syncs locally could create duplicates. A full re-sync would fix this, but was skipped since cloud deployment auto-syncs fresh.
-- **LSP false positives:** pandas type stubs cause warnings on `.rename(columns=...)`, `sort_values(ascending=False)`, `.nunique()`, `.notna()`, `.groupby()` on DataFrames from groupby/filter chains. These are NOT runtime errors.
-- **Rate limiter stale timestamps:** If a sync is interrupted, the `RateLimiter` class can retain stale timestamps that block subsequent requests for the full hourly quota. The initial bulk sync was done with raw `requests` to work around this.
-- **Streamlit Cloud ephemeral filesystem:** The SQLite DB is lost on every cold start. Auto-sync (A7) handles this, but first load always takes ~1-2 minutes.
-- **Streamlit Cloud cannot change Main file path:** Once deployed, the entrypoint filename is locked. The file must remain `app.py`. Use `st.navigation` API to customize sidebar labels instead.
-- **`pages.toml` is NOT a Streamlit feature:** Creating `.streamlit/pages.toml` does nothing. Was attempted and deleted.
+- **Streamlit Cloud cold start only runs CSV sync** (30 req/hr free tier). Enrichment requires manual trigger while on Premium. The dedup guard prevents re-duplication.
+- **"Academic" project renamed to "Agentic"** in Toggl. Historical CSV entries used the old name; enriched rows use the current name. DB now has only "Agentic".
+- **Secrets required for Cloud:** Ensure both `TOGGL_API_TOKEN` and `DASHBOARD_PASSWORD` are configured in Streamlit Cloud secrets.
+- **Streamlit Cloud cannot change Main file path:** Must remain `app.py`.
+- **RateLimiter stale timestamp edge case:** Can retain stale timestamps if sync is interrupted mid-year. Harmless but means the next request waits up to 1 hour unnecessarily. Mitigated by per-year checkpointing in `sync_enriched_all`.
 
 ---
 
 ## Chat Engine Query Types (queries.py)
 
-The pattern-matching engine supports 12 query types:
-
-| Query Type | Example | Handler |
-|---|---|---|
-| Top projects | "top projects", "top projects in 2024" | `_answer_top_projects` |
-| Top tags | "top tags" | `_answer_top_tags` |
-| Tag details | "tag Highlight", "tagged Deep in 2024" | `_answer_tag` |
-| Specific date | "what did I do on March 15, 2023" | `_answer_specific_date` |
-| Date across years | "what did I do on March 15" | `_answer_date_across_years` |
-| Week view | "this week", "last week", "week 12" | `_answer_week` |
-| Today/Yesterday | "today", "yesterday" | `_answer_date_across_years` |
-| Year summary | "how was 2024" | `_answer_year` |
-| Month summary | "in February 2024" | `_answer_month` |
-| Year comparison | "compare 2023 and 2024" | `_answer_compare` |
-| Total stats | "total hours", "all time" | `_answer_totals` |
-| Keyword search | "search meditation" | `_answer_search` |
-| Bare project name | "Work", "Health" | `_answer_project` |
-| Explicit project | "project Work in 2024" | `_answer_project` |
+*(Same as before — pattern-matching, 12 query types, designed for future AI integration)*
 
 ---
 
-## Git Log
+## Git Log (recent)
 
 ```
+(latest) feat: data enrichment phase — JSON sync, schema migration, Premium fields
+7dd2ec6 Add password protection to web dashboard
+ec6018c Add minimalist AGENTS.md for AI agent context
 291ac90 Restructure to st.navigation API for custom sidebar labels
 d27e88e Added Dev Container Folder
 f1a701e Redesign homepage as weekly Highlight journal
-f90ac09 Add activeContext.md documenting project state and progress
-8f40690 Add st.secrets fallback for Streamlit Cloud deployment
-ee514fa Initial commit: Toggl time tracking dashboard with cyberpunk neon theme
 ```

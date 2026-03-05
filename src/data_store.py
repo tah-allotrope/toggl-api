@@ -200,9 +200,41 @@ def upsert_time_entries(conn: sqlite3.Connection, entries: list[dict]):
     Insert or replace time entries. Computes derived date columns automatically.
     Handles both CSV-sourced entries (synthetic id, toggl_id=None) and
     JSON-sourced entries (id = toggl_id = native Toggl integer).
+
+    Deduplication guard: CSV-sourced entries (toggl_id=None) are checked against
+    existing enriched rows before insertion. If an enriched row already exists with
+    the same (start[:19], duration, description) the CSV entry is skipped — this
+    prevents re-duplication when sync_current_year() runs after an enrichment sync.
+    Enriched entries (toggl_id IS NOT NULL) always go through INSERT OR REPLACE and
+    will update any stale CSV row that snuck in via the synthetic id collision path.
     """
+    # Build a lookup of enriched entries already in the DB so CSV entries can be
+    # skipped when they duplicate an enriched row. We only need start[:19] + duration
+    # + description — the same triple used during the deduplication cleanup.
+    csv_entries = [e for e in entries if not e.get("toggl_id")]
+    enriched_entries = [e for e in entries if e.get("toggl_id")]
+
+    existing_enriched_keys: set[tuple] = set()
+    if csv_entries:
+        # Load just the three columns needed for matching — fast indexed scan.
+        rows_db = conn.execute(
+            "SELECT substr(start,1,19) as s19, duration, description "
+            "FROM time_entries WHERE toggl_id IS NOT NULL AND duration > 0"
+        ).fetchall()
+        existing_enriched_keys = {(r[0], r[1], r[2]) for r in rows_db}
+
+    # Filter out CSV entries that already have an enriched counterpart.
+    filtered_csv: list[dict] = []
+    for e in csv_entries:
+        start_str = e.get("start", "")
+        key = (start_str[:19], e.get("duration", 0), e.get("description"))
+        if key not in existing_enriched_keys:
+            filtered_csv.append(e)
+
+    entries_to_write = enriched_entries + filtered_csv
+
     rows = []
-    for e in entries:
+    for e in entries_to_write:
         start_str = e.get("start", "")
         try:
             dt = datetime.fromisoformat(start_str.replace("Z", "+00:00"))
