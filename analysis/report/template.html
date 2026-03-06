@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>{{ meta.title }}</title>
+
+<!-- Plotly CDN — must load before any inline chart divs are used -->
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+
+<style>
+/* ─────────────────────────────────────────────
+   BASE / RESET
+───────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:       #0a0a1a;
+  --bg2:      #12122a;
+  --bg3:      #1a1a3e;
+  --cyan:     #00fff9;
+  --magenta:  #ff00ff;
+  --green:    #39ff14;
+  --purple:   #bc13fe;
+  --pink:     #ff2079;
+  --gold:     #ffd700;
+  --amber:    #ff9800;
+  --text:     #e0e0ff;
+  --muted:    #7878a8;
+  --grid:     #1e1e4a;
+  --border:   #2a2a5a;
+  --radius:   6px;
+  --font-mono: "Courier New", Courier, monospace;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+a { color: var(--cyan); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ─────────────────────────────────────────────
+   SCANLINE OVERLAY (subtle CRT effect)
+───────────────────────────────────────────── */
+body::before {
+  content: "";
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent 3px,
+    rgba(0,0,0,0.08) 3px,
+    rgba(0,0,0,0.08) 4px
+  );
+  z-index: 9999;
+}
+
+/* ─────────────────────────────────────────────
+   LAYOUT
+───────────────────────────────────────────── */
+.page-wrap {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  min-height: 100vh;
+}
+
+/* ─────────────────────────────────────────────
+   SIDEBAR / TOC
+───────────────────────────────────────────── */
+.sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  background: var(--bg2);
+  border-right: 1px solid var(--border);
+  padding: 24px 16px;
+}
+
+.sidebar-logo {
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.sidebar-title {
+  font-size: 15px;
+  font-weight: bold;
+  color: var(--cyan);
+  text-shadow: 0 0 10px var(--cyan);
+  margin-bottom: 4px;
+  line-height: 1.3;
+}
+
+.sidebar-date {
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 20px;
+}
+
+.toc-heading {
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 14px 0 6px;
+}
+
+.toc-list { list-style: none; }
+
+.toc-list li { margin: 4px 0; }
+
+.toc-list a {
+  display: block;
+  padding: 4px 8px;
+  border-radius: var(--radius);
+  font-size: 12px;
+  color: var(--text);
+  border-left: 2px solid transparent;
+  transition: all 0.15s;
+}
+
+.toc-list a:hover,
+.toc-list a.active {
+  color: var(--cyan);
+  border-left-color: var(--cyan);
+  background: rgba(0,255,249,0.06);
+  text-decoration: none;
+}
+
+/* ─────────────────────────────────────────────
+   MAIN CONTENT
+───────────────────────────────────────────── */
+.main {
+  padding: 40px 48px;
+  max-width: 1400px;
+}
+
+/* ─────────────────────────────────────────────
+   REPORT HEADER
+───────────────────────────────────────────── */
+.report-header {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 32px;
+  margin-bottom: 40px;
+}
+
+.report-label {
+  font-size: 11px;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--magenta);
+  margin-bottom: 8px;
+}
+
+.report-title {
+  font-size: 32px;
+  font-weight: bold;
+  color: var(--cyan);
+  text-shadow: 0 0 20px rgba(0,255,249,0.5);
+  margin-bottom: 12px;
+  line-height: 1.2;
+}
+
+.report-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.meta-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+}
+
+.meta-card-label {
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.meta-card-value {
+  font-size: 20px;
+  font-weight: bold;
+  color: var(--gold);
+}
+
+.meta-card-sub {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+/* ─────────────────────────────────────────────
+   ANALYSIS SECTIONS
+───────────────────────────────────────────── */
+.analysis-section {
+  margin-bottom: 60px;
+  scroll-margin-top: 24px;
+}
+
+.section-header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.section-number {
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  color: var(--magenta);
+  text-shadow: 0 0 8px var(--magenta);
+  white-space: nowrap;
+}
+
+.section-title {
+  font-size: 20px;
+  font-weight: bold;
+  color: var(--cyan);
+}
+
+/* ─────────────────────────────────────────────
+   SUMMARY CARDS (per analyzer)
+───────────────────────────────────────────── */
+.summary-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.summary-pill {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 6px 14px;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.summary-pill strong {
+  color: var(--gold);
+  margin-right: 4px;
+}
+
+/* ─────────────────────────────────────────────
+   NARRATIVE
+───────────────────────────────────────────── */
+.narrative {
+  background: var(--bg2);
+  border-left: 3px solid var(--cyan);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  padding: 14px 18px;
+  margin-bottom: 28px;
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+/* ─────────────────────────────────────────────
+   FIGURES
+───────────────────────────────────────────── */
+.figures-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(560px, 1fr));
+  gap: 20px;
+  margin-bottom: 28px;
+}
+
+.figure-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.figure-caption {
+  font-size: 11px;
+  color: var(--muted);
+  padding: 6px 12px;
+  border-top: 1px solid var(--border);
+  text-align: center;
+}
+
+/* ─────────────────────────────────────────────
+   DATA TABLES
+───────────────────────────────────────────── */
+.table-section {
+  margin-bottom: 24px;
+}
+
+.table-label {
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.data-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.data-table thead tr {
+  background: var(--bg3);
+  border-bottom: 1px solid var(--border);
+}
+
+.data-table th {
+  padding: 8px 12px;
+  text-align: left;
+  color: var(--cyan);
+  font-weight: normal;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.data-table tbody tr:nth-child(even) {
+  background: rgba(255,255,255,0.02);
+}
+
+.data-table tbody tr:hover {
+  background: rgba(0,255,249,0.04);
+}
+
+.data-table td {
+  padding: 7px 12px;
+  border-bottom: 1px solid rgba(42,42,90,0.5);
+  color: var(--text);
+  white-space: nowrap;
+}
+
+/* ─────────────────────────────────────────────
+   APPENDIX
+───────────────────────────────────────────── */
+.appendix-section {
+  margin-bottom: 60px;
+  scroll-margin-top: 24px;
+}
+
+.appendix-block {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px 24px;
+  margin-bottom: 16px;
+}
+
+.appendix-block h4 {
+  color: var(--gold);
+  font-size: 13px;
+  margin-bottom: 10px;
+  letter-spacing: 0.05em;
+}
+
+.appendix-block p,
+.appendix-block li {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.7;
+  margin-bottom: 6px;
+}
+
+.appendix-block ul { padding-left: 16px; }
+
+/* ─────────────────────────────────────────────
+   FOOTER
+───────────────────────────────────────────── */
+.report-footer {
+  border-top: 1px solid var(--border);
+  padding-top: 20px;
+  margin-top: 60px;
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* ─────────────────────────────────────────────
+   SCROLLBAR
+───────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg2); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+/* ─────────────────────────────────────────────
+   RESPONSIVE — collapse sidebar on small screens
+───────────────────────────────────────────── */
+@media (max-width: 860px) {
+  .page-wrap { grid-template-columns: 1fr; }
+  .sidebar {
+    position: static;
+    height: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+  .main { padding: 24px 20px; }
+  .figures-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+
+<body>
+<div class="page-wrap">
+
+<!-- ── SIDEBAR ────────────────────────────────────────────────────── -->
+<nav class="sidebar" aria-label="Table of contents">
+  <div class="sidebar-logo">Toggl Time Journal</div>
+  <div class="sidebar-title">Deep Dive Analysis</div>
+  <div class="sidebar-date">{{ meta.generated_at }}</div>
+
+  <div class="toc-heading">Overview</div>
+  <ul class="toc-list">
+    <li><a href="#overview">Data Overview</a></li>
+  </ul>
+
+  <div class="toc-heading">Analysis</div>
+  <ul class="toc-list">
+    {% for result in results %}
+    <li><a href="#section-{{ result.name }}">{{ loop.index }}. {{ result.title }}</a></li>
+    {% endfor %}
+  </ul>
+
+  <div class="toc-heading">Reference</div>
+  <ul class="toc-list">
+    <li><a href="#appendix">Appendix</a></li>
+  </ul>
+</nav>
+
+<!-- ── MAIN ───────────────────────────────────────────────────────── -->
+<main class="main">
+
+  <!-- REPORT HEADER -->
+  <header class="report-header" id="top">
+    <div class="report-label">Personal Analytics Report</div>
+    <div class="report-title">{{ meta.title }}</div>
+    <div style="font-size:12px; color:var(--muted);">Generated {{ meta.generated_at }} &nbsp;|&nbsp; Database: {{ meta.db_path }}</div>
+
+    <div class="report-meta-grid" id="overview">
+      <div class="meta-card">
+        <div class="meta-card-label">Total Entries</div>
+        <div class="meta-card-value">{{ "{:,}".format(meta.total_entries) }}</div>
+        <div class="meta-card-sub">time entries</div>
+      </div>
+      <div class="meta-card">
+        <div class="meta-card-label">Total Hours</div>
+        <div class="meta-card-value">{{ "{:,.0f}".format(meta.total_hours) }}</div>
+        <div class="meta-card-sub">tracked hours</div>
+      </div>
+      <div class="meta-card">
+        <div class="meta-card-label">Date Range</div>
+        <div class="meta-card-value" style="font-size:13px;">{{ meta.earliest_date }}<br>→ {{ meta.latest_date }}</div>
+        <div class="meta-card-sub">{{ meta.years_tracked }} years</div>
+      </div>
+      <div class="meta-card">
+        <div class="meta-card-label">Projects</div>
+        <div class="meta-card-value">{{ meta.unique_projects }}</div>
+        <div class="meta-card-sub">unique projects</div>
+      </div>
+      <div class="meta-card">
+        <div class="meta-card-label">Enriched</div>
+        <div class="meta-card-value">{{ "{:.0f}".format(meta.enriched_pct) }}%</div>
+        <div class="meta-card-sub">entries with full metadata</div>
+      </div>
+      {% if meta.date_filter %}
+      <div class="meta-card">
+        <div class="meta-card-label">Date Filter</div>
+        <div class="meta-card-value" style="font-size:13px; color:var(--amber);">Active</div>
+        <div class="meta-card-sub">{{ meta.date_filter }}</div>
+      </div>
+      {% endif %}
+    </div>
+  </header>
+
+  <!-- ANALYSIS SECTIONS -->
+  {% for result in results %}
+  <section class="analysis-section" id="section-{{ result.name }}">
+
+    <div class="section-header">
+      <span class="section-number">// {{ "%02d"|format(loop.index) }}</span>
+      <h2 class="section-title">{{ result.title }}</h2>
+    </div>
+
+    <!-- Summary pills -->
+    {% if result.summary %}
+    <div class="summary-grid">
+      {% for key, val in result.summary.items() %}
+      <div class="summary-pill"><strong>{{ key | replace("_", " ") | title }}:</strong> {{ val }}</div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Narrative -->
+    {% if result.narrative %}
+    <div class="narrative">{{ result.narrative }}</div>
+    {% endif %}
+
+    <!-- Figures -->
+    {% if result.figures_html %}
+    <div class="figures-grid">
+      {% for fig_html in result.figures_html %}
+      <div class="figure-card">
+        {{ fig_html | safe }}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Tables -->
+    {% if result.tables_html %}
+    {% for table_label, table_html in result.tables_html %}
+    <div class="table-section">
+      <div class="table-label">{{ table_label }}</div>
+      <div class="data-table-wrap">
+        {{ table_html | safe }}
+      </div>
+    </div>
+    {% endfor %}
+    {% endif %}
+
+  </section>
+  {% endfor %}
+
+  <!-- APPENDIX -->
+  <section class="appendix-section" id="appendix">
+    <div class="section-header">
+      <span class="section-number">// AP</span>
+      <h2 class="section-title">Appendix</h2>
+    </div>
+
+    <div class="appendix-block">
+      <h4>Data Sources &amp; Methodology</h4>
+      <p>All data is read from a local SQLite database populated by syncing with the Toggl Track API v9
+         and Toggl Reports API v3. Entries with <code>duration &le; 0</code> (running timers) are excluded
+         from all analyses.</p>
+      <ul>
+        <li><strong>CSV sync:</strong> fast historical backfill, ~1 API call per calendar year.</li>
+        <li><strong>JSON enrichment sync:</strong> full field set including client, task, tag metadata.</li>
+        <li>Tags are stored as JSON arrays; native Toggl IDs used post-enrichment; SHA-256 synthetic IDs for CSV-only entries.</li>
+      </ul>
+    </div>
+
+    <div class="appendix-block">
+      <h4>Analyzer Descriptions</h4>
+      <ul>
+        <li><strong>Longitudinal:</strong> Stacked category composition, HHI concentration index, rolling stats, YoY heatmap, session violin, active-days rate, transition velocity.</li>
+        <li><strong>Changepoints:</strong> PELT + Binseg change-point detection via <code>ruptures</code> across 5 signals; transition event aggregation; annotated timeline.</li>
+        <li><strong>Rhythms:</strong> Hour-of-day heatmap by year, day-of-week patterns, sleep/wake proxy, seasonal decomposition, weekend ratio, consistency CoV.</li>
+        <li><strong>Correlations:</strong> Pearson correlation heatmap, crowding-out analysis, trade-off pairs, K-Means week archetypes, lead/lag cross-correlation, network graph.</li>
+        <li><strong>Text Mining:</strong> TF-IDF top terms, NMF + LDA topic modeling, topic prevalence over time, VADER sentiment drift, vocabulary evolution heatmap, description length trend.</li>
+        <li><strong>Life Phases:</strong> Multivariate PELT on weekly feature matrix; auto-labeled phase epochs; Gantt chart, radar chart, phase comparison table.</li>
+      </ul>
+    </div>
+
+    <div class="appendix-block">
+      <h4>Dependencies</h4>
+      <ul>
+        <li>Python 3.10+ · Pandas · NumPy · Plotly · Jinja2</li>
+        <li>scikit-learn (TF-IDF, NMF, LDA, KMeans, StandardScaler)</li>
+        <li>ruptures (PELT and Binseg change-point detection)</li>
+        <li>scipy (seasonal decomposition, statistical tests)</li>
+        <li>vaderSentiment (sentiment analysis)</li>
+      </ul>
+    </div>
+
+    <div class="appendix-block">
+      <h4>Data Quality Notes</h4>
+      <ul>
+        <li>Enrichment data (client, task, full tag metadata) is only available after running a JSON enrichment sync and is lost on Streamlit Cloud cold starts.</li>
+        <li>Text mining results depend on description coverage — many entries may have no description.</li>
+        <li>Change-point sensitivity is set to <code>pen=3</code> for PELT; adjust in <code>analysis/analyzers/changepoints.py</code>.</li>
+        <li>Life phase detection requires at least 52 weeks of data (1 year) for meaningful segmentation.</li>
+      </ul>
+    </div>
+  </section>
+
+  <footer class="report-footer">
+    Toggl Time Journal &mdash; Deep Dive Analysis &mdash; {{ meta.generated_at }}
+    &nbsp;|&nbsp; <code>python -m analysis</code>
+  </footer>
+
+</main>
+</div>
+
+<!-- ── TOC active-link highlight on scroll ───────────────────────── -->
+<script>
+(function () {
+  const links = document.querySelectorAll('.toc-list a');
+  const targets = Array.from(links)
+    .map(a => document.querySelector(a.getAttribute('href')))
+    .filter(Boolean);
+
+  const observer = new IntersectionObserver(
+    entries => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const id = '#' + entry.target.id;
+          links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === id));
+        }
+      });
+    },
+    { rootMargin: '-10% 0px -80% 0px' }
+  );
+
+  targets.forEach(t => observer.observe(t));
+})();
+</script>
+
+</body>
+</html>

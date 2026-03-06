@@ -15,6 +15,10 @@ Personal time-tracking analytics dashboard that pulls 10 years of Toggl data int
 ```bash
 pip install -r requirements.txt   # Install dependencies
 streamlit run app.py              # Run locally on :8501
+python -m analysis                # Generate deep-dive HTML report
+python -m analysis --only longitudinal,rhythms   # Run specific analyzers
+python -m analysis --start 2020-01-01 --end 2024-12-31  # Date-filtered report
+python -m analysis --output path/to/report.html --no-open --quiet
 ```
 
 No test framework. No linter. No type checker configured.
@@ -27,6 +31,33 @@ No test framework. No linter. No type checker configured.
 - Pattern-matching chat engine (regex-routed, supports projects/tags/clients/tasks)
 - Theme system: CSS injection + custom Plotly template
 - Password-protected login via `DASHBOARD_PASSWORD`
+
+## Analysis Module (`analysis/`)
+
+Standalone CLI module — zero coupling to `src/` or Streamlit. Reads `data/toggl.db` directly
+and produces a single self-contained cyberpunk-themed HTML report.
+
+### Analyzers (run in this order)
+1. `longitudinal.py` — stacked composition, HHI concentration, rolling stats, YoY heatmap, session violin
+2. `rhythms.py` — hour-of-day heatmap, day-of-week, sleep/wake proxy, seasonal decomp, weekend ratio
+3. `changepoints.py` — PELT + Binseg via `ruptures`, multi-signal, transition events, annotated timeline
+4. `correlations.py` — correlation heatmap, crowding-out, KMeans week archetypes, lead/lag cross-corr
+5. `text_mining.py` — TF-IDF, NMF + LDA topics, topic prevalence, VADER sentiment, vocab evolution
+6. `life_phases.py` — multivariate PELT on weekly feature matrix, auto-labels phases, Gantt + radar
+
+### Key files
+- `analysis/data_access.py` — `load_entries()`, `load_daily_series()`, `load_weekly_matrix()`, `get_db_meta()`
+- `analysis/run.py` — argparse CLI orchestrator
+- `analysis/__main__.py` — enables `python -m analysis`
+- `analysis/report/renderer.py` — `render_report(results, meta) -> str`
+- `analysis/report/template.html` — Jinja2 cyberpunk HTML template
+- `analysis/output/` — gitignored; reports written here by default
+
+### Conventions
+- Each analyzer defines its own `AnalysisResult` dataclass: `name`, `title`, `summary`, `figures`, `tables`, `narrative`
+- Colors re-declared locally in each file as `_C` dict — do NOT import from `src/theme.py`
+- `ruptures` and `scikit-learn` guarded with try/except; module degrades gracefully if missing
+- `life_phases.analyze()` accepts optional `text_mining_result` for LDA topic cross-referencing
 
 ## Data Model
 

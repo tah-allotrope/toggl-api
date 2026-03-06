@@ -6,3 +6,4 @@ __pycache__/
 .streamlit/secrets.toml
 streamlit.log
 .claude/
+analysis/output/
