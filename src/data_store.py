@@ -22,6 +22,12 @@ DATA_DIR = Path(__file__).parent.parent / "data"
 DB_PATH = DATA_DIR / "toggl.db"
 
 
+def _attach_tags_list(df: pd.DataFrame) -> None:
+    """Decode the JSON 'tags' column into a Python list column 'tags_list' in-place."""
+    if not df.empty and "tags" in df.columns:
+        df["tags_list"] = df["tags"].apply(lambda x: json.loads(x) if x else [])
+
+
 def get_connection() -> sqlite3.Connection:
     """Get a SQLite connection, creating the database and tables if needed."""
     DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -455,10 +461,10 @@ def get_entries_df(conn: sqlite3.Connection, year: int | None = None,
     query += " ORDER BY start ASC"
     df = pd.read_sql_query(query, conn, params=params)
 
-    if not df.empty and "tags" in df.columns:
-        df["tags_list"] = df["tags"].apply(lambda x: json.loads(x) if x else [])
+    _attach_tags_list(df)
 
     return df
+
 
 
 def get_available_years(conn: sqlite3.Connection) -> list[int]:
@@ -501,8 +507,7 @@ def get_entries_for_date_across_years(conn: sqlite3.Connection, month: int, day:
         ORDER BY start_year ASC, start ASC
     """
     df = pd.read_sql_query(query, conn, params=[month, day])
-    if not df.empty and "tags" in df.columns:
-        df["tags_list"] = df["tags"].apply(lambda x: json.loads(x) if x else [])
+    _attach_tags_list(df)
     return df
 
 
@@ -514,8 +519,7 @@ def get_entries_for_week_across_years(conn: sqlite3.Connection, week: int) -> pd
         ORDER BY start_year ASC, start ASC
     """
     df = pd.read_sql_query(query, conn, params=[week])
-    if not df.empty and "tags" in df.columns:
-        df["tags_list"] = df["tags"].apply(lambda x: json.loads(x) if x else [])
+    _attach_tags_list(df)
     return df
 
 
@@ -573,8 +577,8 @@ def search_entries(conn: sqlite3.Connection, keyword: str, limit: int = 200) -> 
     """
     pattern = f"%{keyword}%"
     df = pd.read_sql_query(query, conn, params=[pattern, pattern, pattern, limit])
-    if not df.empty and "tags" in df.columns:
-        df["tags_list"] = df["tags"].apply(lambda x: json.loads(x) if x else [])
+    _attach_tags_list(df)
+
     return df
 
 
@@ -609,8 +613,8 @@ def get_entries_by_tag(conn: sqlite3.Connection, tag_name: str,
         params.append(year)
     query += " ORDER BY start DESC"
     df = pd.read_sql_query(query, conn, params=params)
-    if not df.empty and "tags" in df.columns:
-        df["tags_list"] = df["tags"].apply(lambda x: json.loads(x) if x else [])
+    _attach_tags_list(df)
+
     return df
 
 

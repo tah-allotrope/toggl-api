@@ -39,9 +39,6 @@ _LAYOUT = dict(
     font=dict(color=_C["text"], family="monospace"),
     margin=dict(l=60, r=30, t=50, b=50),
 )
-_AXIS = dict(gridcolor=_C["grid"], zerolinecolor=_C["grid"])
-
-
 @dataclass
 class TransitionEvent:
     date: str                              # YYYY-MM-DD
@@ -228,10 +225,11 @@ def _build_weekly_aggregates(entries: pd.DataFrame, daily: pd.DataFrame) -> pd.D
 # PELT detection
 # ---------------------------------------------------------------------------
 
-def _detect_pelt(signal: np.ndarray, n_penalties: int = 5) -> list[int]:
+def _detect_pelt(signal: np.ndarray, n_penalties: int = 3) -> list[int]:
     """
-    Run PELT at multiple penalty values; return indices stable across ≥3 penalties.
+    Run PELT at multiple penalty values; return indices stable across ≥2 penalties.
     Indices refer to positions in the signal array (start of new segment).
+    jump=2 halves computation vs jump=1 with minimal accuracy loss on 480-point series.
     """
     if not _HAS_RUPTURES or len(signal) < 20:
         return []
@@ -250,14 +248,14 @@ def _detect_pelt(signal: np.ndarray, n_penalties: int = 5) -> list[int]:
     cp_votes: dict[int, int] = {}
     for pen in penalties:
         try:
-            algo = rpt.Pelt(model="rbf", min_size=4, jump=1).fit(s_norm.reshape(-1, 1))
+            algo = rpt.Pelt(model="rbf", min_size=4, jump=2).fit(s_norm.reshape(-1, 1))
             bkps = algo.predict(pen=pen)
             for bp in bkps[:-1]:  # last element is len(signal)
                 cp_votes[bp] = cp_votes.get(bp, 0) + 1
         except Exception:
             continue
 
-    # Keep changepoints that appear in at least 3 out of n_penalties runs
+    # Keep changepoints that appear in at least 2 out of n_penalties runs
     threshold = max(2, n_penalties // 2)
     stable = sorted([idx for idx, votes in cp_votes.items() if votes >= threshold])
     return stable

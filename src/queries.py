@@ -28,40 +28,15 @@ MONTH_MAP = {
 }
 
 
-def _fuzzy_match_project(name: str, known_projects: list[str]) -> str | None:
-    """Case-insensitive match of user input against known project names."""
+def _fuzzy_match(name: str, candidates: list[str]) -> str | None:
+    """Case-insensitive match of user input against a list of known names."""
     lower = name.lower().strip()
-    for proj in known_projects:
-        if proj.lower() == lower:
-            return proj
-    # Partial / substring match as fallback
-    for proj in known_projects:
-        if lower in proj.lower() or proj.lower() in lower:
-            return proj
-    return None
-
-
-def _fuzzy_match_client(name: str, known_clients: list[str]) -> str | None:
-    """Case-insensitive match of user input against known client names."""
-    lower = name.lower().strip()
-    for c in known_clients:
+    for c in candidates:
         if c.lower() == lower:
             return c
-    for c in known_clients:
+    for c in candidates:
         if lower in c.lower() or c.lower() in lower:
             return c
-    return None
-
-
-def _fuzzy_match_tag(name: str, known_tags: list[str]) -> str | None:
-    """Case-insensitive match of user input against known tag names."""
-    lower = name.lower().strip()
-    for tag in known_tags:
-        if tag.lower() == lower:
-            return tag
-    for tag in known_tags:
-        if lower in tag.lower() or tag.lower() in lower:
-            return tag
     return None
 
 
@@ -107,7 +82,7 @@ def _dispatch_question(q: str, conn) -> str:
     if client_match:
         client_name = client_match.group(1).strip()
         year_val = int(client_match.group(2)) if client_match.group(2) else None
-        matched_client = _fuzzy_match_client(client_name, known_clients)
+        matched_client = _fuzzy_match(client_name, known_clients)
         if matched_client:
             return _answer_client(conn, matched_client, year_val)
         return f"No client matching '{client_name}'. Known clients: {', '.join(known_clients)}"
@@ -128,7 +103,7 @@ def _dispatch_question(q: str, conn) -> str:
     if tag_match:
         tag_name = tag_match.group(1).strip()
         year_val = int(tag_match.group(2)) if tag_match.group(2) else None
-        matched_tag = _fuzzy_match_tag(tag_name, known_tags)
+        matched_tag = _fuzzy_match(tag_name, known_tags)
         if matched_tag:
             return _answer_tag(conn, matched_tag, year_val)
         return f"No tag matching '{tag_name}' found. Known tags: {', '.join(known_tags)}"
@@ -212,7 +187,7 @@ def _dispatch_question(q: str, conn) -> str:
     if project_match:
         project_name = project_match.group(1).strip()
         year_val = int(project_match.group(2)) if project_match.group(2) else None
-        matched = _fuzzy_match_project(project_name, known_projects)
+        matched = _fuzzy_match(project_name, known_projects)
         if matched:
             return _answer_project(conn, matched, year_val)
         return f"No project matching '{project_name}'. Known projects: {', '.join(known_projects[:10])}..."

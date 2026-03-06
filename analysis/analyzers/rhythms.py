@@ -36,7 +36,6 @@ _LAYOUT = dict(
     font=dict(color=_C["text"], family="monospace"),
     margin=dict(l=60, r=30, t=50, b=50),
 )
-_AXIS = dict(gridcolor=_C["grid"], zerolinecolor=_C["grid"])
 
 _DOW = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 

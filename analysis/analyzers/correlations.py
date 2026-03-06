@@ -43,8 +43,6 @@ _LAYOUT = dict(
     font=dict(color=_C["text"], family="monospace"),
     margin=dict(l=60, r=30, t=50, b=50),
 )
-_AXIS = dict(gridcolor=_C["grid"], zerolinecolor=_C["grid"])
-
 _MIN_PROJECTS = 4
 _N_ARCHETYPES = 7
 _TOP_N = 20

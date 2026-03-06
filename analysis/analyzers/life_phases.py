@@ -49,8 +49,6 @@ _LAYOUT = dict(
     font=dict(color=_C["text"], family="monospace"),
     margin=dict(l=60, r=30, t=50, b=50),
 )
-_AXIS = dict(gridcolor=_C["grid"], zerolinecolor=_C["grid"])
-
 _INTENSITY_LABELS = {
     (0.0, 1.5):  "Low-Track",
     (1.5, 3.0):  "Moderate",
@@ -293,7 +291,7 @@ def _detect_phase_boundaries(feature_df: pd.DataFrame) -> list[int]:
     for dim in range(X_scaled.shape[1]):
         signal = X_scaled[:, dim].reshape(-1, 1)
         try:
-            algo = rpt.Pelt(model="rbf", min_size=6, jump=1).fit(signal)
+            algo = rpt.Pelt(model="rbf", min_size=6, jump=2).fit(signal)
             # Use a moderate penalty
             bkps = algo.predict(pen=3.0)
             for bp in bkps[:-1]:
@@ -374,10 +372,13 @@ def _characterize_phases(
         seg_end_date = all_dates[min(seg_end - 1, len(all_dates) - 1)]
         duration_days = (seg_end_date - seg_start_date).days + 7
 
-        # Filter entries for this period
+        # Filter entries for this period (entries["start_dt"] is tz-aware UTC)
+        seg_start_utc = seg_start_date if seg_start_date.tzinfo is not None else seg_start_date.tz_localize("UTC")
+        seg_end_utc = (seg_end_date + pd.Timedelta(days=7))
+        seg_end_utc = seg_end_utc if seg_end_utc.tzinfo is not None else seg_end_utc.tz_localize("UTC")
         seg_entries = entries[
-            (entries["start_dt"] >= seg_start_date) &
-            (entries["start_dt"] <= seg_end_date + pd.Timedelta(days=7))
+            (entries["start_dt"] >= seg_start_utc) &
+            (entries["start_dt"] <= seg_end_utc)
         ]
 
         if seg_entries.empty:

@@ -227,30 +227,6 @@ def load_weekly_matrix(top_n_projects: int = 25) -> pd.DataFrame:
 
 
 # ---------------------------------------------------------------------------
-# Description corpus for text mining
-# ---------------------------------------------------------------------------
-
-def load_description_corpus() -> pd.DataFrame:
-    """
-    Return a DataFrame with entry descriptions alongside metadata.
-
-    Columns: id, description, start_date, start_year, project_name,
-             duration_hours, tags_list
-    Only includes entries with non-empty descriptions.
-    """
-    df = load_entries()
-    if df.empty:
-        return pd.DataFrame()
-
-    cols = ["id", "description", "start_date", "start_year", "project_name",
-            "duration_hours", "tags_list", "quarter", "year_month"]
-    corpus = df[cols].copy()
-    corpus = corpus[corpus["description"].notna() & (corpus["description"].str.strip() != "")]
-    corpus["description"] = corpus["description"].str.strip()
-    return corpus.reset_index(drop=True)
-
-
-# ---------------------------------------------------------------------------
 # Projects reference table
 # ---------------------------------------------------------------------------
 

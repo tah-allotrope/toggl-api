@@ -51,8 +51,6 @@ _LAYOUT = dict(
     font=dict(color=_C["text"], family="monospace"),
     margin=dict(l=60, r=30, t=50, b=50),
 )
-_AXIS = dict(gridcolor=_C["grid"], zerolinecolor=_C["grid"])
-
 # Embedded English stop words (no NLTK download required)
 _STOP_WORDS = frozenset({
     "a", "an", "the", "and", "or", "but", "in", "on", "at", "to", "for",
@@ -126,7 +124,7 @@ def analyze(entries: pd.DataFrame, daily: pd.DataFrame, weekly: pd.DataFrame) ->
     tfidf_vec = TfidfVectorizer(
         min_df=5, max_df=0.85,
         ngram_range=(1, 2),
-        max_features=5000,
+        max_features=2000,
         stop_words=list(_STOP_WORDS),
         preprocessor=lambda x: x,  # already cleaned
     )
@@ -150,7 +148,7 @@ def analyze(entries: pd.DataFrame, daily: pd.DataFrame, weekly: pd.DataFrame) ->
     count_vec = CountVectorizer(
         min_df=5, max_df=0.85,
         ngram_range=(1, 2),
-        max_features=5000,
+        max_features=2000,
         stop_words=list(_STOP_WORDS),
         preprocessor=lambda x: x,
     )
@@ -162,7 +160,7 @@ def analyze(entries: pd.DataFrame, daily: pd.DataFrame, weekly: pd.DataFrame) ->
     if X_count is not None:
         lda = LatentDirichletAllocation(
             n_components=n_topics, random_state=42,
-            max_iter=20, learning_method="online",
+            max_iter=10, learning_method="online",
         )
         W_lda = lda.fit_transform(X_count)
         lda_topics = _extract_topics(lda, count_vec, "LDA")
@@ -329,27 +327,36 @@ def _topic_prevalence(
 # ---------------------------------------------------------------------------
 
 def _sentiment_drift(corpus_df: pd.DataFrame) -> tuple[go.Figure, float]:
-    """Rolling 90-day mean VADER compound sentiment."""
+    """Rolling 90-day mean VADER compound sentiment. Scores a sample for speed."""
     analyzer = SentimentIntensityAnalyzer()
 
     def score(text: str) -> float:
         return float(analyzer.polarity_scores(str(text))["compound"])
 
-    corpus_df = corpus_df.copy()
-    corpus_df["sentiment"] = corpus_df["description"].apply(score)
-    corpus_df["start_dt"] = pd.to_datetime(corpus_df["start_date"])
-    corpus_df = corpus_df.sort_values("start_dt")
+    corpus_df = corpus_df.copy().sort_values("start_date")
 
-    # Rolling 90-entry window (not days, to handle sparse periods)
+    # Sample up to 4000 entries for scoring (VADER is slow on 50k+)
+    _MAX_SENTIMENT_ENTRIES = 4000
+    if len(corpus_df) > _MAX_SENTIMENT_ENTRIES:
+        sample_df = corpus_df.sample(_MAX_SENTIMENT_ENTRIES, random_state=42).sort_values("start_date")
+    else:
+        sample_df = corpus_df
+
+    sample_df = sample_df.copy()
+    sample_df["sentiment"] = sample_df["description"].apply(score)
+    sample_df["start_dt_local"] = pd.to_datetime(sample_df["start_date"])
+    sample_df = sample_df.sort_values("start_dt_local")
+
+    # Rolling 90-day window on the sample
     rolling = (
-        corpus_df.set_index("start_dt")["sentiment"]
+        sample_df.set_index("start_dt_local")["sentiment"]
         .rolling("90D", min_periods=20)
         .mean()
     )
-    mean_sentiment = float(corpus_df["sentiment"].mean())
+    mean_sentiment = float(sample_df["sentiment"].mean())
 
     # Yearly mean line
-    yearly = corpus_df.groupby("start_year")["sentiment"].mean()
+    yearly = sample_df.groupby("start_year")["sentiment"].mean()
 
     fig = make_subplots(
         rows=2, cols=1, row_heights=[0.65, 0.35],

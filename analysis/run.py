@@ -21,7 +21,7 @@ from __future__ import annotations
 import argparse
 import sys
 import webbrowser
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
@@ -58,6 +58,10 @@ def _progress(step: str, quiet: bool) -> None:
 # ---------------------------------------------------------------------------
 
 def main(argv: list[str] | None = None) -> None:
+    # Ensure stdout can handle Unicode (needed on Windows with cp1252 console)
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
     parser = argparse.ArgumentParser(
         prog="python -m analysis",
         description="Generate a deep-dive HTML analysis report from toggl.db",
@@ -157,7 +161,6 @@ def main(argv: list[str] | None = None) -> None:
     else:
         meta["date_filter"] = None
 
-    from datetime import datetime
     meta["generated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
 
     _log(
@@ -223,7 +226,7 @@ def main(argv: list[str] | None = None) -> None:
 
     html = render_report(results, meta)
 
-    _progress(f"writing → {out_path}", args.quiet)
+    _progress(f"writing -> {out_path}", args.quiet)
     out_path.write_text(html, encoding="utf-8")
 
     _log(f"\nReport written to: {out_path}", args.quiet)

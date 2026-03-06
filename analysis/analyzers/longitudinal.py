@@ -14,8 +14,6 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-
 # ---------------------------------------------------------------------------
 # Cyberpunk color palette (mirrors src/theme.py without importing it)
 # ---------------------------------------------------------------------------
@@ -49,9 +47,6 @@ _LAYOUT = dict(
     font=dict(color=_C["text"], family="monospace"),
     margin=dict(l=60, r=30, t=50, b=50),
 )
-_AXIS = dict(gridcolor=_C["grid"], zerolinecolor=_C["grid"])
-
-
 def _apply_layout(fig: go.Figure, title: str = "", height: int = 420) -> go.Figure:
     fig.update_layout(**_LAYOUT, title=dict(text=title, font=dict(color=_C["cyan"])), height=height)
     return fig
