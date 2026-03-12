@@ -9,6 +9,7 @@ streamlit.log
 analysis/output/
 frontend/node_modules/
 frontend/dist/
+frontend/.env
 .firebase/
 functions/__pycache__/
 functions/venv/

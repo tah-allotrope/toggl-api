@@ -8,16 +8,6 @@ from typing import Any
 from firebase_admin import firestore, initialize_app
 from firebase_functions import https_fn, options
 
-from chat_engine import answer_question
-from sync_engine import (
-    get_stats as get_stats_impl,
-    get_sync_status as get_sync_status_impl,
-    sync_current_year,
-    sync_enriched_year as sync_enriched_year_impl,
-    sync_full as sync_full_impl,
-)
-from toggl_client import TogglClient
-
 initialize_app()
 
 
@@ -29,7 +19,9 @@ def _require_auth(req: https_fn.CallableRequest) -> None:
         )
 
 
-def _client() -> TogglClient:
+def _client():
+    from toggl_client import TogglClient
+
     token = os.getenv("TOGGL_API_TOKEN", "")
     if not token:
         raise https_fn.HttpsError(
@@ -42,6 +34,8 @@ def _client() -> TogglClient:
 @https_fn.on_call(timeout_sec=300, memory=options.MemoryOption.MB_512)
 def sync_quick(req: https_fn.CallableRequest) -> dict[str, Any]:
     """Run current-year sync and return summary payload."""
+    from sync_engine import sync_current_year
+
     _require_auth(req)
     db = firestore.client()
     result = sync_current_year(_client(), db)
@@ -57,6 +51,8 @@ def sync_quick(req: https_fn.CallableRequest) -> dict[str, Any]:
 @https_fn.on_call(timeout_sec=300, memory=options.MemoryOption.GB_1)
 def sync_full(req: https_fn.CallableRequest) -> dict[str, Any]:
     """Run full multi-year sync and return summary payload."""
+    from sync_engine import sync_full as sync_full_impl
+
     _require_auth(req)
     earliest_year = 2017
     if isinstance(req.data, dict) and req.data.get("earliest_year") is not None:
@@ -76,6 +72,8 @@ def sync_full(req: https_fn.CallableRequest) -> dict[str, Any]:
 @https_fn.on_call(timeout_sec=540, memory=options.MemoryOption.GB_1)
 def sync_enriched_year(req: https_fn.CallableRequest) -> dict[str, Any]:
     """Run single-year enriched sync and return summary payload."""
+    from sync_engine import sync_enriched_year as sync_enriched_year_impl
+
     _require_auth(req)
     if not isinstance(req.data, dict) or req.data.get("year") is None:
         raise https_fn.HttpsError(
@@ -98,6 +96,8 @@ def sync_enriched_year(req: https_fn.CallableRequest) -> dict[str, Any]:
 @https_fn.on_call(timeout_sec=120, memory=options.MemoryOption.MB_512)
 def chat_answer(req: https_fn.CallableRequest) -> dict[str, Any]:
     """Answer a natural-language time-tracking question."""
+    from chat_engine import answer_question
+
     _require_auth(req)
     if not isinstance(req.data, dict) or not req.data.get("question"):
         raise https_fn.HttpsError(
@@ -113,6 +113,8 @@ def chat_answer(req: https_fn.CallableRequest) -> dict[str, Any]:
 @https_fn.on_call(timeout_sec=60, memory=options.MemoryOption.MB_256)
 def get_sync_status(req: https_fn.CallableRequest) -> dict[str, Any]:
     """Return sync metadata and data-availability status."""
+    from sync_engine import get_sync_status as get_sync_status_impl
+
     _require_auth(req)
     db = firestore.client()
     return get_sync_status_impl(db)
@@ -121,6 +123,8 @@ def get_sync_status(req: https_fn.CallableRequest) -> dict[str, Any]:
 @https_fn.on_call(timeout_sec=60, memory=options.MemoryOption.MB_256)
 def get_stats(req: https_fn.CallableRequest) -> dict[str, Any]:
     """Return high-level data and enrichment statistics."""
+    from sync_engine import get_stats as get_stats_impl
+
     _require_auth(req)
     db = firestore.client()
     return get_stats_impl(db)
