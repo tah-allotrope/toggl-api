@@ -1,3 +1,4 @@
+# DEPRECATED: Legacy SQLite data layer for Streamlit app. See functions/data_store.py.
 """
 SQLite-backed local data store for Toggl time entries, projects, tags, tasks, and clients.
 
@@ -212,6 +213,7 @@ def _apply_migrations(conn: sqlite3.Connection):
 # Insert / Upsert
 # ---------------------------------------------------------------------------
 
+
 def upsert_time_entries(conn: sqlite3.Connection, entries: list[dict]):
     """
     Insert or replace time entries. Computes derived date columns automatically.
@@ -273,40 +275,45 @@ def upsert_time_entries(conn: sqlite3.Connection, entries: list[dict]):
         tags = e.get("tags") or []
         tag_ids = e.get("tag_ids") or []
 
-        rows.append((
-            e.get("id"),
-            e.get("description"),
-            start_str,
-            e.get("stop"),
-            duration_sec,
-            e.get("project_id"),
-            e.get("project_name", ""),
-            e.get("workspace_id") or e.get("wid"),
-            json.dumps(tags),
-            json.dumps(tag_ids),
-            1 if e.get("billable") else 0,
-            e.get("at", ""),
-            start_date,
-            start_year,
-            start_month,
-            start_day,
-            start_week,
-            duration_hours,
-            e.get("toggl_id"),
-            e.get("task_id"),
-            e.get("task_name", "") or "",
-            e.get("client_name", "") or "",
-            e.get("user_id"),
-        ))
+        rows.append(
+            (
+                e.get("id"),
+                e.get("description"),
+                start_str,
+                e.get("stop"),
+                duration_sec,
+                e.get("project_id"),
+                e.get("project_name", ""),
+                e.get("workspace_id") or e.get("wid"),
+                json.dumps(tags),
+                json.dumps(tag_ids),
+                1 if e.get("billable") else 0,
+                e.get("at", ""),
+                start_date,
+                start_year,
+                start_month,
+                start_day,
+                start_week,
+                duration_hours,
+                e.get("toggl_id"),
+                e.get("task_id"),
+                e.get("task_name", "") or "",
+                e.get("client_name", "") or "",
+                e.get("user_id"),
+            )
+        )
 
-    conn.executemany("""
+    conn.executemany(
+        """
         INSERT OR REPLACE INTO time_entries
             (id, description, start, stop, duration, project_id, project_name,
              workspace_id, tags, tag_ids, billable, at,
              start_date, start_year, start_month, start_day, start_week, duration_hours,
              toggl_id, task_id, task_name, client_name, user_id)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, rows)
+    """,
+        rows,
+    )
     conn.commit()
 
 
@@ -321,35 +328,40 @@ def upsert_projects(conn: sqlite3.Connection, projects: list[dict]):
         recurring_params_json = (
             json.dumps(recurring_params) if recurring_params is not None else None
         )
-        rows.append((
-            p["id"],
-            p.get("name", ""),
-            p.get("workspace_id") or p.get("wid"),
-            p.get("color", ""),
-            1 if p.get("active", True) else 0,
-            p.get("at", ""),
-            # Enrichment fields
-            p.get("client_id"),
-            1 if p.get("billable") else None,
-            p.get("rate"),
-            p.get("currency"),
-            p.get("fixed_fee"),
-            p.get("estimated_hours"),
-            p.get("estimated_seconds"),
-            1 if p.get("auto_estimates") else None,
-            1 if p.get("recurring") else None,
-            recurring_params_json,
-            1 if p.get("template") else None,
-        ))
+        rows.append(
+            (
+                p["id"],
+                p.get("name", ""),
+                p.get("workspace_id") or p.get("wid"),
+                p.get("color", ""),
+                1 if p.get("active", True) else 0,
+                p.get("at", ""),
+                # Enrichment fields
+                p.get("client_id"),
+                1 if p.get("billable") else None,
+                p.get("rate"),
+                p.get("currency"),
+                p.get("fixed_fee"),
+                p.get("estimated_hours"),
+                p.get("estimated_seconds"),
+                1 if p.get("auto_estimates") else None,
+                1 if p.get("recurring") else None,
+                recurring_params_json,
+                1 if p.get("template") else None,
+            )
+        )
 
-    conn.executemany("""
+    conn.executemany(
+        """
         INSERT OR REPLACE INTO projects
             (id, name, workspace_id, color, active, at,
              client_id, billable, rate, currency, fixed_fee,
              estimated_hours, estimated_seconds, auto_estimates,
              recurring, recurring_parameters, template)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, rows)
+    """,
+        rows,
+    )
     conn.commit()
 
 
@@ -369,10 +381,13 @@ def upsert_tags(conn: sqlite3.Connection, tags: list[dict]):
         )
         for t in tags
     ]
-    conn.executemany("""
+    conn.executemany(
+        """
         INSERT OR REPLACE INTO tags (id, name, workspace_id, creator_id, at, deleted_at)
         VALUES (?, ?, ?, ?, ?, ?)
-    """, rows)
+    """,
+        rows,
+    )
     conn.commit()
 
 
@@ -388,10 +403,13 @@ def upsert_clients(conn: sqlite3.Connection, clients: list[dict]):
         )
         for c in clients
     ]
-    conn.executemany("""
+    conn.executemany(
+        """
         INSERT OR REPLACE INTO clients (id, name, workspace_id, archived, at)
         VALUES (?, ?, ?, ?, ?)
-    """, rows)
+    """,
+        rows,
+    )
     conn.commit()
 
 
@@ -410,11 +428,14 @@ def upsert_tasks(conn: sqlite3.Connection, tasks: list[dict]):
         )
         for t in tasks
     ]
-    conn.executemany("""
+    conn.executemany(
+        """
         INSERT OR REPLACE INTO tasks
             (id, name, project_id, workspace_id, active, estimated_seconds, tracked_seconds, at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    """, rows)
+    """,
+        rows,
+    )
     conn.commit()
 
 
@@ -422,8 +443,11 @@ def upsert_tasks(conn: sqlite3.Connection, tasks: list[dict]):
 # Sync metadata
 # ---------------------------------------------------------------------------
 
+
 def set_sync_meta(conn: sqlite3.Connection, key: str, value: str):
-    conn.execute("INSERT OR REPLACE INTO sync_meta (key, value) VALUES (?, ?)", (key, value))
+    conn.execute(
+        "INSERT OR REPLACE INTO sync_meta (key, value) VALUES (?, ?)", (key, value)
+    )
     conn.commit()
 
 
@@ -436,9 +460,14 @@ def get_sync_meta(conn: sqlite3.Connection, key: str) -> str | None:
 # Query helpers — these power the dashboard and retrospect pages
 # ---------------------------------------------------------------------------
 
-def get_entries_df(conn: sqlite3.Connection, year: int | None = None,
-                   start_date: str | None = None, end_date: str | None = None,
-                   columns: list[str] | None = None) -> pd.DataFrame:
+
+def get_entries_df(
+    conn: sqlite3.Connection,
+    year: int | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    columns: list[str] | None = None,
+) -> pd.DataFrame:
     """
     Return time entries as a Pandas DataFrame, optionally filtered.
     This is the main query method used by all UI pages.
@@ -466,7 +495,6 @@ def get_entries_df(conn: sqlite3.Connection, year: int | None = None,
     return df
 
 
-
 def get_available_years(conn: sqlite3.Connection) -> list[int]:
     """Return sorted list of years that have data."""
     rows = conn.execute(
@@ -489,17 +517,22 @@ def get_clients_df(conn: sqlite3.Connection) -> pd.DataFrame:
     return pd.read_sql_query("SELECT * FROM clients ORDER BY name", conn)
 
 
-def get_tasks_df(conn: sqlite3.Connection, project_id: int | None = None) -> pd.DataFrame:
+def get_tasks_df(
+    conn: sqlite3.Connection, project_id: int | None = None
+) -> pd.DataFrame:
     """Return tasks, optionally filtered by project."""
     if project_id:
         return pd.read_sql_query(
             "SELECT * FROM tasks WHERE project_id = ? ORDER BY name",
-            conn, params=[project_id],
+            conn,
+            params=[project_id],
         )
     return pd.read_sql_query("SELECT * FROM tasks ORDER BY name", conn)
 
 
-def get_entries_for_date_across_years(conn: sqlite3.Connection, month: int, day: int) -> pd.DataFrame:
+def get_entries_for_date_across_years(
+    conn: sqlite3.Connection, month: int, day: int
+) -> pd.DataFrame:
     """Get all entries that occurred on a specific month/day across all years (for retrospect)."""
     query = """
         SELECT * FROM time_entries
@@ -511,7 +544,9 @@ def get_entries_for_date_across_years(conn: sqlite3.Connection, month: int, day:
     return df
 
 
-def get_entries_for_week_across_years(conn: sqlite3.Connection, week: int) -> pd.DataFrame:
+def get_entries_for_week_across_years(
+    conn: sqlite3.Connection, week: int
+) -> pd.DataFrame:
     """Get all entries for a specific ISO week number across all years."""
     query = """
         SELECT * FROM time_entries
@@ -566,7 +601,9 @@ def get_enrichment_stats(conn: sqlite3.Connection) -> dict:
     return result
 
 
-def search_entries(conn: sqlite3.Connection, keyword: str, limit: int = 200) -> pd.DataFrame:
+def search_entries(
+    conn: sqlite3.Connection, keyword: str, limit: int = 200
+) -> pd.DataFrame:
     """Search entries by description, project name, or tags."""
     query = """
         SELECT * FROM time_entries
@@ -582,8 +619,9 @@ def search_entries(conn: sqlite3.Connection, keyword: str, limit: int = 200) -> 
     return df
 
 
-def get_entries_by_tag(conn: sqlite3.Connection, tag_name: str,
-                       year: int | None = None) -> pd.DataFrame:
+def get_entries_by_tag(
+    conn: sqlite3.Connection, tag_name: str, year: int | None = None
+) -> pd.DataFrame:
     """
     Get all entries containing a specific tag.
     Primary: JSON name search on the tags column.

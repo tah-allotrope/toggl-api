@@ -1,3 +1,4 @@
+# DEPRECATED: Legacy Streamlit sync orchestrator. See functions/sync_engine.py.
 """
 Sync orchestrator: coordinates fetching data from Toggl and storing it locally.
 
@@ -15,9 +16,15 @@ from typing import Callable
 
 from src.toggl_client import TogglClient
 from src.data_store import (
-    get_connection, upsert_time_entries, upsert_projects, upsert_tags,
-    upsert_clients, upsert_tasks,
-    set_sync_meta, get_sync_meta, get_available_years,
+    get_connection,
+    upsert_time_entries,
+    upsert_projects,
+    upsert_tags,
+    upsert_clients,
+    upsert_tasks,
+    set_sync_meta,
+    get_sync_meta,
+    get_available_years,
 )
 
 DATA_RAW_DIR = Path(__file__).parent.parent / "data" / "raw"

@@ -1,3 +1,4 @@
+# DEPRECATED: Legacy Streamlit page. See frontend/src/pages/chat.js.
 """
 Chat page: conversational interface to query your time data.
 
@@ -10,6 +11,7 @@ from src.queries import answer_question
 from src.data_store import get_connection, get_available_years
 
 from src.theme import apply_theme
+
 apply_theme()
 
 st.title("Chat with Your Time Data")
@@ -35,18 +37,18 @@ if "messages" not in st.session_state:
             "content": (
                 "Hi! I can help you explore your Toggl time tracking history. "
                 "Here's what I can do:\n\n"
-                '**Time periods:**\n'
+                "**Time periods:**\n"
                 '- "How was 2024?" -- Year summary\n'
                 '- "What did I do on March 15?" -- Date across all years\n'
                 '- "In February 2024" -- Monthly summary\n'
                 '- "This week" / "Last week" -- Weekly view\n'
                 '- "Today" / "Yesterday" -- Today in history\n\n'
-                '**Projects & Tags:**\n'
+                "**Projects & Tags:**\n"
                 '- "Top projects" / "Top projects in 2024" -- Project ranking\n'
                 '- "Top tags" -- Tag ranking\n'
                 '- Just type a project name (e.g. "Work", "Health") -- Project details\n'
                 '- "Tag Highlight" / "Tagged Deep in 2024" -- Tag details\n\n'
-                '**Analysis:**\n'
+                "**Analysis:**\n"
                 '- "Compare 2023 and 2024" -- Year comparison\n'
                 '- "Total hours" -- All-time stats\n'
                 '- "Search meditation" -- Keyword search across descriptions, projects & tags\n\n'

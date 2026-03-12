@@ -1,3 +1,4 @@
+# DEPRECATED: Legacy Streamlit theme. See frontend/src/theme.js and frontend/src/styles.css.
 """
 Cyberpunk Neon theme for the Toggl Time Journal.
 
@@ -13,21 +14,21 @@ import plotly.graph_objects as go
 # Color palette -- single source of truth
 # ---------------------------------------------------------------------------
 COLORS = {
-    "bg":           "#0a0a1a",
-    "bg2":          "#12122a",
-    "bg3":          "#1a1a3e",
-    "cyan":         "#00fff9",
-    "magenta":      "#ff00ff",
-    "green":        "#39ff14",
-    "purple":       "#bc13fe",
-    "pink":         "#ff2079",
-    "gold":         "#ffd700",
-    "amber":        "#ff9800",
-    "red":          "#ff3131",
-    "text":         "#e0e0ff",
-    "text_muted":   "#7878a8",
-    "grid":         "#1e1e4a",
-    "border":       "#2a2a5a",
+    "bg": "#0a0a1a",
+    "bg2": "#12122a",
+    "bg3": "#1a1a3e",
+    "cyan": "#00fff9",
+    "magenta": "#ff00ff",
+    "green": "#39ff14",
+    "purple": "#bc13fe",
+    "pink": "#ff2079",
+    "gold": "#ffd700",
+    "amber": "#ff9800",
+    "red": "#ff3131",
+    "text": "#e0e0ff",
+    "text_muted": "#7878a8",
+    "grid": "#1e1e4a",
+    "border": "#2a2a5a",
 }
 
 # Categorical color sequence for Plotly charts (cycling)
@@ -40,14 +41,14 @@ NEON_SEQUENCE = [
     COLORS["gold"],
     COLORS["amber"],
     COLORS["red"],
-    "#00b4d8",   # softer cyan
-    "#e040fb",   # softer magenta
-    "#76ff03",   # lime
-    "#7c4dff",   # deep purple
-    "#18ffff",   # light cyan
-    "#ff6e40",   # deep orange
-    "#eeff41",   # yellow-green
-    "#ea80fc",   # light purple
+    "#00b4d8",  # softer cyan
+    "#e040fb",  # softer magenta
+    "#76ff03",  # lime
+    "#7c4dff",  # deep purple
+    "#18ffff",  # light cyan
+    "#ff6e40",  # deep orange
+    "#eeff41",  # yellow-green
+    "#ea80fc",  # light purple
 ]
 
 # Continuous color scales for intensity charts
@@ -378,7 +379,9 @@ def _build_plotly_template() -> go.layout.Template:
     """Build a cyberpunk-neon Plotly template."""
     return go.layout.Template(
         layout=go.Layout(
-            font=dict(family="Share Tech Mono, monospace", color=COLORS["text"], size=12),
+            font=dict(
+                family="Share Tech Mono, monospace", color=COLORS["text"], size=12
+            ),
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(10,10,26,0.6)",
             title=dict(font=dict(color=COLORS["cyan"], size=16)),

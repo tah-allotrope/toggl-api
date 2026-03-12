@@ -7,3 +7,10 @@ __pycache__/
 streamlit.log
 .claude/
 analysis/output/
+frontend/node_modules/
+frontend/dist/
+.firebase/
+functions/__pycache__/
+functions/venv/
+*serviceAccountKey*
+*.json.key

@@ -1,3 +1,4 @@
+# DEPRECATED: Legacy Streamlit page. See frontend/src/pages/dashboard.js.
 """
 Dashboard page: year-level charts, project/tag breakdowns, activity heatmap.
 Cyberpunk neon theme applied to all visualizations.
@@ -12,9 +13,15 @@ from datetime import date
 from src.data_store import get_connection, get_entries_df, get_available_years
 
 from src.theme import (
-    apply_theme, neon_chart_layout, COLORS, NEON_SEQUENCE,
-    SCALE_CYAN_MAGENTA, SCALE_NEON_HEATMAP, SCALE_MAGENTA_FIRE,
+    apply_theme,
+    neon_chart_layout,
+    COLORS,
+    NEON_SEQUENCE,
+    SCALE_CYAN_MAGENTA,
+    SCALE_NEON_HEATMAP,
+    SCALE_MAGENTA_FIRE,
 )
+
 apply_theme()
 
 st.title("Dashboard")
@@ -150,7 +157,9 @@ st.subheader("Time by Tag")
 
 if "tags_list" in df.columns:
     tags_exploded = df.explode("tags_list")
-    tags_exploded = tags_exploded[tags_exploded["tags_list"].notna() & (tags_exploded["tags_list"] != "")]
+    tags_exploded = tags_exploded[
+        tags_exploded["tags_list"].notna() & (tags_exploded["tags_list"] != "")
+    ]
 
     if not tags_exploded.empty:
         tag_hours = (
@@ -301,7 +310,10 @@ if selected_project:
         col_m1, col_m2, col_m3 = st.columns(3)
         col_m1.metric("Total Hours", f"{proj_df['duration_hours'].sum():,.1f}")
         col_m2.metric("Entries", f"{len(proj_df):,}")
-        col_m3.metric("Date Range", f"{proj_df['start_date'].min()} to {proj_df['start_date'].max()}")
+        col_m3.metric(
+            "Date Range",
+            f"{proj_df['start_date'].min()} to {proj_df['start_date'].max()}",
+        )
 
         with st.expander("Top Descriptions", expanded=True):
             top_desc = (
@@ -320,7 +332,9 @@ if selected_project:
             )
 
         if "task_name" in proj_df.columns:
-            proj_tasks = proj_df[proj_df["task_name"].notna() & (proj_df["task_name"] != "")]
+            proj_tasks = proj_df[
+                proj_df["task_name"].notna() & (proj_df["task_name"] != "")
+            ]
             if not proj_tasks.empty:
                 with st.expander("Linked Tasks"):
                     task_summary = (
@@ -369,15 +383,17 @@ fig.update_traces(
     ),
 )
 # Add a gradient fill under the line
-fig.add_trace(go.Scatter(
-    x=monthly["Month"],
-    y=monthly["Hours"],
-    fill="tozeroy",
-    fillcolor=f"rgba(0, 255, 249, 0.08)",
-    line=dict(width=0),
-    showlegend=False,
-    hoverinfo="skip",
-))
+fig.add_trace(
+    go.Scatter(
+        x=monthly["Month"],
+        y=monthly["Hours"],
+        fill="tozeroy",
+        fillcolor=f"rgba(0, 255, 249, 0.08)",
+        line=dict(width=0),
+        showlegend=False,
+        hoverinfo="skip",
+    )
+)
 neon_chart_layout(fig, height=400)
 fig.update_layout(xaxis_tickangle=-45)
 st.plotly_chart(fig, use_container_width=True)
@@ -413,15 +429,17 @@ def _render_heatmap(data: pd.DataFrame, title: str, height: int = 220):
     # Ensure all 7 weekdays are present
     pivot = pivot.reindex(index=range(7), fill_value=0).fillna(0)
 
-    fig = go.Figure(data=go.Heatmap(
-        z=pivot.values,
-        x=[f"W{w}" for w in pivot.columns],
-        y=[day_labels[i] for i in pivot.index],
-        colorscale=SCALE_NEON_HEATMAP,
-        hovertemplate="Week %{x}<br>%{y}<br>%{z:.1f} hours<extra></extra>",
-        xgap=2,
-        ygap=2,
-    ))
+    fig = go.Figure(
+        data=go.Heatmap(
+            z=pivot.values,
+            x=[f"W{w}" for w in pivot.columns],
+            y=[day_labels[i] for i in pivot.index],
+            colorscale=SCALE_NEON_HEATMAP,
+            hovertemplate="Week %{x}<br>%{y}<br>%{z:.1f} hours<extra></extra>",
+            xgap=2,
+            ygap=2,
+        )
+    )
     neon_chart_layout(fig, height=height)
     fig.update_layout(
         title=title,

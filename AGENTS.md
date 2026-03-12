@@ -5,16 +5,20 @@ Personal time-tracking analytics dashboard that pulls 10 years of Toggl data int
 ## Stack
 
 - **Language:** Python 3.10+ (uses `X | Y` union syntax)
-- **Framework:** Streamlit (requires 1.52+ for `st.navigation`)
-- **Data:** Pandas, Plotly, SQLite (stdlib `sqlite3`)
+- **Framework:** Firebase Hosting (frontend SPA) + Firebase Cloud Functions (Python)
+- **Data:** Pandas, Plotly, SQLite (analysis module), Cloud Firestore (app runtime)
 - **API:** Toggl Track API v9, Toggl Reports API v3
-- **Package manager:** pip
+- **Package manager:** pip + npm
 
 ## Commands
 
 ```bash
 pip install -r requirements.txt   # Install dependencies
-streamlit run app.py              # Run locally on :8501
+streamlit run app.py              # Legacy Streamlit app on :8501 (deprecated)
+cd frontend && npm install && npm run dev  # Run frontend locally on :5173
+firebase deploy                   # Deploy hosting + functions + firestore rules/indexes
+firebase deploy --only functions  # Deploy Cloud Functions only
+firebase deploy --only hosting    # Deploy frontend hosting only
 python -m analysis                # Generate deep-dive HTML report
 python -m analysis --only longitudinal,rhythms   # Run specific analyzers
 python -m analysis --start 2020-01-01 --end 2024-12-31  # Date-filtered report
@@ -25,12 +29,25 @@ No test framework. No linter. No type checker configured.
 
 ## Architecture
 
-- 4 Streamlit pages behind `st.navigation` (Homepage, Dashboard, Retrospect, Chat)
+- Frontend SPA under `frontend/` with 4 routes (Homepage, Dashboard, Retrospect, Chat)
+- Firebase Authentication (email/password) for private access
+- Firebase Cloud Functions under `functions/` for sync, chat, status, and stats APIs
+- Cloud Firestore collections for time entries, projects, tags, clients, tasks, and sync metadata
 - API client with sliding-window rate limiter (auto-detects Premium 600 req/hr from headers)
-- Sync engine: CSV sync (fast, 1 call/year) + JSON enrichment sync (full field set, Premium)
+- Sync engine supports current-year quick sync, full sync, and per-year enriched sync
 - Pattern-matching chat engine (regex-routed, supports projects/tags/clients/tasks)
-- Theme system: CSS injection + custom Plotly template
-- Password-protected login via `DASHBOARD_PASSWORD`
+- Cyberpunk theme implemented in frontend CSS + Plotly.js layout config
+
+## Firebase Setup
+
+1. Create a Firebase project in the Firebase Console.
+2. Install Firebase CLI and run `firebase login`.
+3. Initialize project config in this repo with `firebase init`.
+4. Enable Firestore, Hosting, Authentication (Email/Password), and Functions.
+5. Set environment token for functions runtime:
+   - local dev: set `TOGGL_API_TOKEN` in function environment
+   - deployed: configure function env vars in Firebase project settings
+6. Update `.firebaserc` with your real Firebase project ID.
 
 ## Analysis Module (`analysis/`)
 

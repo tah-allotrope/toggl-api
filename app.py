@@ -1,3 +1,4 @@
+# DEPRECATED: Streamlit entrypoint. See frontend/ for the Firebase SPA.
 """
 Toggl Time Journal -- Router / Entrypoint.
 
@@ -45,6 +46,7 @@ if not is_authenticated:
 
 
 from src.theme import apply_theme
+
 apply_theme()
 
 from src.sync import sync_all, sync_current_year, sync_enriched_all, get_sync_status
@@ -54,12 +56,16 @@ from src.data_store import get_connection, get_enrichment_stats
 # Navigation: declare all pages (replaces pages/ auto-discovery)
 # ---------------------------------------------------------------------------
 
-pg = st.navigation([
-    st.Page("pages/0_Homepage.py", title="Homepage", icon="\U0001f3e0", default=True),
-    st.Page("pages/1_Dashboard.py", title="Dashboard", icon="\U0001f4ca"),
-    st.Page("pages/2_Retrospect.py", title="Retrospect", icon="\U0001f50d"),
-    st.Page("pages/3_Chat.py", title="Chat", icon="\U0001f4ac"),
-])
+pg = st.navigation(
+    [
+        st.Page(
+            "pages/0_Homepage.py", title="Homepage", icon="\U0001f3e0", default=True
+        ),
+        st.Page("pages/1_Dashboard.py", title="Dashboard", icon="\U0001f4ca"),
+        st.Page("pages/2_Retrospect.py", title="Retrospect", icon="\U0001f50d"),
+        st.Page("pages/3_Chat.py", title="Chat", icon="\U0001f4ac"),
+    ]
+)
 
 # ---------------------------------------------------------------------------
 # Sidebar: Sync controls (shared across all pages)
@@ -75,18 +81,25 @@ if sync_status["has_data"]:
     if sync_status["last_full_sync"]:
         st.sidebar.caption(f"Last full sync: {sync_status['last_full_sync'][:16]}")
     if sync_status["last_incremental_sync"]:
-        st.sidebar.caption(f"Last quick sync: {sync_status['last_incremental_sync'][:16]}")
+        st.sidebar.caption(
+            f"Last quick sync: {sync_status['last_incremental_sync'][:16]}"
+        )
     if sync_status["last_enriched_sync"]:
-        st.sidebar.caption(f"Last enriched sync: {sync_status['last_enriched_sync'][:16]}")
+        st.sidebar.caption(
+            f"Last enriched sync: {sync_status['last_enriched_sync'][:16]}"
+        )
 else:
     st.sidebar.warning("No data yet. Run a full sync to get started.")
 
 st.sidebar.divider()
 
 # Quick sync (current year only)
-if st.sidebar.button("Quick Sync (current year)", type="primary", use_container_width=True):
+if st.sidebar.button(
+    "Quick Sync (current year)", type="primary", use_container_width=True
+):
     try:
         from src.toggl_client import TogglClient
+
         client = TogglClient()
         progress_bar = st.sidebar.progress(0)
         status_text = st.sidebar.empty()
@@ -104,10 +117,13 @@ if st.sidebar.button("Quick Sync (current year)", type="primary", use_container_
 
 # Full sync
 with st.sidebar.expander("Full Sync (all years)"):
-    earliest = st.number_input("Earliest year", min_value=2006, max_value=date.today().year, value=2017)
+    earliest = st.number_input(
+        "Earliest year", min_value=2006, max_value=date.today().year, value=2017
+    )
     if st.button("Run Full Sync", use_container_width=True):
         try:
             from src.toggl_client import TogglClient
+
             client = TogglClient()
             progress_bar = st.progress(0)
             status_text = st.empty()
@@ -116,7 +132,9 @@ with st.sidebar.expander("Full Sync (all years)"):
                 status_text.text(msg)
                 progress_bar.progress(min(frac, 1.0))
 
-            result = sync_all(client, earliest_year=int(earliest), progress_callback=on_full_progress)
+            result = sync_all(
+                client, earliest_year=int(earliest), progress_callback=on_full_progress
+            )
             st.success(
                 f"Synced {result['total_entries']} entries across {result['years_synced']} years "
                 f"({result['projects']} projects, {result['tags']} tags)"
@@ -143,7 +161,8 @@ with st.sidebar.expander("Enriched Sync (Premium)", expanded=False):
             _conn.close()
             _pct = (
                 int(100 * _stats["enriched_entries"] / _stats["total_entries"])
-                if _stats["total_entries"] > 0 else 0
+                if _stats["total_entries"] > 0
+                else 0
             )
             st.metric(
                 "Enrichment Coverage",
@@ -152,7 +171,9 @@ with st.sidebar.expander("Enriched Sync (Premium)", expanded=False):
             if sync_status["last_enriched_sync"]:
                 st.caption(f"Last enriched: {sync_status['last_enriched_sync'][:16]}")
             if _stats["total_tasks"] > 0 or _stats["total_clients"] > 0:
-                st.caption(f"{_stats['total_tasks']} tasks · {_stats['total_clients']} clients stored")
+                st.caption(
+                    f"{_stats['total_tasks']} tasks · {_stats['total_clients']} clients stored"
+                )
         except Exception:
             pass
 
@@ -162,12 +183,16 @@ with st.sidebar.expander("Enriched Sync (Premium)", expanded=False):
     )
 
     earliest_e = st.number_input(
-        "Earliest year", min_value=2006, max_value=date.today().year, value=2017,
+        "Earliest year",
+        min_value=2006,
+        max_value=date.today().year,
+        value=2017,
         key="enriched_earliest",
     )
     if st.button("Run Enriched Sync", use_container_width=True, type="secondary"):
         try:
             from src.toggl_client import TogglClient
+
             client = TogglClient()
             progress_bar = st.progress(0)
             status_text = st.empty()
@@ -186,7 +211,9 @@ with st.sidebar.expander("Enriched Sync (Premium)", expanded=False):
                 f"({result['tasks']} tasks, {result['clients']} clients)"
             )
             if result["errors"]:
-                st.warning(f"{len(result['errors'])} year(s) failed: {', '.join(result['errors'])}")
+                st.warning(
+                    f"{len(result['errors'])} year(s) failed: {', '.join(result['errors'])}"
+                )
             time.sleep(1.5)
             st.rerun()
         except Exception as e:

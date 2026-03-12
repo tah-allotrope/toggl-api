@@ -1,3 +1,4 @@
+# DEPRECATED: Legacy Streamlit page. See frontend/src/pages/retrospect.js.
 """
 Retrospect page: "On this day" across all years, week-level comparison,
 and year-over-year side-by-side view.
@@ -13,12 +14,19 @@ import plotly.graph_objects as go
 from datetime import date, datetime, timedelta
 
 from src.data_store import (
-    get_connection, get_entries_for_date_across_years,
-    get_entries_for_week_across_years, get_entries_df, get_available_years,
+    get_connection,
+    get_entries_for_date_across_years,
+    get_entries_for_week_across_years,
+    get_entries_df,
+    get_available_years,
 )
 from src.theme import (
-    apply_theme, neon_chart_layout, COLORS, NEON_SEQUENCE,
-    SCALE_CYAN_MONO, SCALE_MAGENTA_FIRE,
+    apply_theme,
+    neon_chart_layout,
+    COLORS,
+    NEON_SEQUENCE,
+    SCALE_CYAN_MONO,
+    SCALE_MAGENTA_FIRE,
 )
 
 apply_theme()
@@ -50,7 +58,7 @@ with tab_day:
         selected_date = st.date_input(
             "Pick a date",
             value=date.today(),
-            help="See what you were doing on this month/day in every year"
+            help="See what you were doing on this month/day in every year",
         )
 
     month = selected_date.month
@@ -71,9 +79,14 @@ with tab_day:
             )
             .reset_index()
         )
-        year_summary = year_summary.rename(columns={
-            "start_year": "Year", "hours": "Hours", "entries": "Entries", "projects": "Projects",
-        })
+        year_summary = year_summary.rename(
+            columns={
+                "start_year": "Year",
+                "hours": "Hours",
+                "entries": "Entries",
+                "projects": "Projects",
+            }
+        )
 
         # Bar chart: hours by year for this date
         fig = px.bar(
@@ -104,7 +117,13 @@ with tab_day:
                 f"{int(year_val)} -- {total_h:.1f} hours, {len(year_entries)} entries",
                 expanded=(year_val == df_day["start_year"].max()),
             ):
-                display_cols = ["start", "description", "project_name", "duration_hours", "tags"]
+                display_cols = [
+                    "start",
+                    "description",
+                    "project_name",
+                    "duration_hours",
+                    "tags",
+                ]
                 rename_map = {
                     "start": "Start Time",
                     "description": "Description",
@@ -113,13 +132,17 @@ with tab_day:
                     "tags": "Tags",
                 }
                 if "task_name" in year_entries.columns:
-                    has_tasks = year_entries["task_name"].notna() & (year_entries["task_name"] != "")
+                    has_tasks = year_entries["task_name"].notna() & (
+                        year_entries["task_name"] != ""
+                    )
                     if has_tasks.any():
                         display_cols.insert(4, "task_name")
                         rename_map["task_name"] = "Task"
                 display_df = year_entries[display_cols].copy()
                 display_df = display_df.rename(columns=rename_map)
-                display_df["Start Time"] = pd.to_datetime(display_df["Start Time"]).dt.strftime("%H:%M")
+                display_df["Start Time"] = pd.to_datetime(
+                    display_df["Start Time"]
+                ).dt.strftime("%H:%M")
                 display_df["Hours"] = display_df["Hours"].round(2)
                 st.dataframe(display_df, use_container_width=True, hide_index=True)
 
@@ -148,11 +171,11 @@ with tab_week:
     else:
         # Hours per year for this week
         week_by_year = (
-            df_week.groupby("start_year")["duration_hours"]
-            .sum()
-            .reset_index()
+            df_week.groupby("start_year")["duration_hours"].sum().reset_index()
         )
-        week_by_year = week_by_year.rename(columns={"start_year": "Year", "duration_hours": "Hours"})
+        week_by_year = week_by_year.rename(
+            columns={"start_year": "Year", "duration_hours": "Hours"}
+        )
 
         fig = px.bar(
             week_by_year,
@@ -179,9 +202,13 @@ with tab_week:
             .sum()
             .reset_index()
         )
-        week_projects = week_projects.rename(columns={
-            "start_year": "Year", "project_name": "Project", "duration_hours": "Hours",
-        })
+        week_projects = week_projects.rename(
+            columns={
+                "start_year": "Year",
+                "project_name": "Project",
+                "duration_hours": "Hours",
+            }
+        )
         week_projects["Project"] = week_projects["Project"].replace("", "(No Project)")
 
         fig2 = px.bar(
@@ -205,10 +232,14 @@ with tab_compare:
 
     col1, col2 = st.columns(2)
     with col1:
-        year_a = st.selectbox("Year A", sorted(years, reverse=True), index=0, key="year_a")
+        year_a = st.selectbox(
+            "Year A", sorted(years, reverse=True), index=0, key="year_a"
+        )
     with col2:
         default_b = min(1, len(years) - 1)
-        year_b = st.selectbox("Year B", sorted(years, reverse=True), index=default_b, key="year_b")
+        year_b = st.selectbox(
+            "Year B", sorted(years, reverse=True), index=default_b, key="year_b"
+        )
 
     df_a = get_entries_df(conn, year=year_a)
     df_b = get_entries_df(conn, year=year_b)
@@ -220,23 +251,51 @@ with tab_compare:
         df_a["month"] = df_a["start_month"]
         df_b["month"] = df_b["start_month"]
 
-        monthly_a = df_a.groupby("month")["duration_hours"].sum().reindex(range(1, 13), fill_value=0)
-        monthly_b = df_b.groupby("month")["duration_hours"].sum().reindex(range(1, 13), fill_value=0)
+        monthly_a = (
+            df_a.groupby("month")["duration_hours"]
+            .sum()
+            .reindex(range(1, 13), fill_value=0)
+        )
+        monthly_b = (
+            df_b.groupby("month")["duration_hours"]
+            .sum()
+            .reindex(range(1, 13), fill_value=0)
+        )
 
-        month_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                       "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        month_names = [
+            "Jan",
+            "Feb",
+            "Mar",
+            "Apr",
+            "May",
+            "Jun",
+            "Jul",
+            "Aug",
+            "Sep",
+            "Oct",
+            "Nov",
+            "Dec",
+        ]
 
         fig = go.Figure()
-        fig.add_trace(go.Bar(
-            x=month_names, y=monthly_a.values, name=str(year_a),
-            marker_color=COLORS["cyan"],
-            marker_line=dict(width=1, color=COLORS["cyan"]),
-        ))
-        fig.add_trace(go.Bar(
-            x=month_names, y=monthly_b.values, name=str(year_b),
-            marker_color=COLORS["magenta"],
-            marker_line=dict(width=1, color=COLORS["magenta"]),
-        ))
+        fig.add_trace(
+            go.Bar(
+                x=month_names,
+                y=monthly_a.values,
+                name=str(year_a),
+                marker_color=COLORS["cyan"],
+                marker_line=dict(width=1, color=COLORS["cyan"]),
+            )
+        )
+        fig.add_trace(
+            go.Bar(
+                x=month_names,
+                y=monthly_b.values,
+                name=str(year_b),
+                marker_color=COLORS["magenta"],
+                marker_line=dict(width=1, color=COLORS["magenta"]),
+            )
+        )
         fig.update_layout(
             title=f"Monthly Hours: {year_a} vs {year_b}",
             barmode="group",
@@ -249,21 +308,29 @@ with tab_compare:
         st.markdown("#### Project Hours Comparison")
 
         proj_a = df_a.groupby("project_name")["duration_hours"].sum().reset_index()
-        proj_a = proj_a.rename(columns={"project_name": "Project", "duration_hours": f"{year_a} Hours"})
+        proj_a = proj_a.rename(
+            columns={"project_name": "Project", "duration_hours": f"{year_a} Hours"}
+        )
         proj_b = df_b.groupby("project_name")["duration_hours"].sum().reset_index()
-        proj_b = proj_b.rename(columns={"project_name": "Project", "duration_hours": f"{year_b} Hours"})
+        proj_b = proj_b.rename(
+            columns={"project_name": "Project", "duration_hours": f"{year_b} Hours"}
+        )
 
         proj_compare = pd.merge(proj_a, proj_b, on="Project", how="outer").fillna(0)
         proj_compare["Project"] = proj_compare["Project"].replace("", "(No Project)")
-        proj_compare["Difference"] = proj_compare[f"{year_a} Hours"] - proj_compare[f"{year_b} Hours"]
+        proj_compare["Difference"] = (
+            proj_compare[f"{year_a} Hours"] - proj_compare[f"{year_b} Hours"]
+        )
         proj_compare = proj_compare.sort_values(f"{year_a} Hours", ascending=False)
 
         st.dataframe(
-            proj_compare.style.format({
-                f"{year_a} Hours": "{:.1f}",
-                f"{year_b} Hours": "{:.1f}",
-                "Difference": "{:+.1f}",
-            }),
+            proj_compare.style.format(
+                {
+                    f"{year_a} Hours": "{:.1f}",
+                    f"{year_b} Hours": "{:.1f}",
+                    "Difference": "{:+.1f}",
+                }
+            ),
             use_container_width=True,
             hide_index=True,
         )
@@ -272,17 +339,34 @@ with tab_compare:
         st.markdown("#### Summary Stats")
 
         stats_data = {
-            "Metric": ["Total Hours", "Total Entries", "Active Days", "Unique Projects", "Avg Hours/Day"],
+            "Metric": [
+                "Total Hours",
+                "Total Entries",
+                "Active Days",
+                "Unique Projects",
+                "Avg Hours/Day",
+            ],
         }
 
-        for label, df_x, year_x in [(str(year_a), df_a, year_a), (str(year_b), df_b, year_b)]:
+        for label, df_x, year_x in [
+            (str(year_a), df_a, year_a),
+            (str(year_b), df_b, year_b),
+        ]:
             total_h = df_x["duration_hours"].sum()
             total_e = len(df_x)
             active_d = df_x["start_date"].nunique()
             unique_p = df_x["project_name"].nunique()
             avg_h = total_h / active_d if active_d > 0 else 0
-            stats_data[label] = [f"{total_h:.1f}", str(total_e), str(active_d), str(unique_p), f"{avg_h:.1f}"]
+            stats_data[label] = [
+                f"{total_h:.1f}",
+                str(total_e),
+                str(active_d),
+                str(unique_p),
+                f"{avg_h:.1f}",
+            ]
 
-        st.dataframe(pd.DataFrame(stats_data), use_container_width=True, hide_index=True)
+        st.dataframe(
+            pd.DataFrame(stats_data), use_container_width=True, hide_index=True
+        )
 
 conn.close()

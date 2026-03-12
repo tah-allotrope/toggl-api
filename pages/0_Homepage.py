@@ -1,3 +1,4 @@
+# DEPRECATED: Legacy Streamlit page. See frontend/src/pages/homepage.js.
 """
 Homepage page: card-based journal of Highlight-tagged time entries
 for the current week.
@@ -42,6 +43,7 @@ if not sync_status["has_data"]:
         st.subheader("Auto-syncing your data...")
         try:
             from src.toggl_client import TogglClient
+
             client = TogglClient()
             auto_bar = st.progress(0)
             auto_status = st.empty()
@@ -51,7 +53,10 @@ if not sync_status["has_data"]:
                 auto_bar.progress(min(frac, 1.0))
 
             import time
-            result = sync_all(client, earliest_year=2017, progress_callback=on_auto_progress)
+
+            result = sync_all(
+                client, earliest_year=2017, progress_callback=on_auto_progress
+            )
             st.success(
                 f"Auto-sync complete! {result['total_entries']} entries across "
                 f"{result['years_synced']} years."
@@ -89,9 +94,7 @@ else:
 # Render: week header + card journal
 # ---------------------------------------------------------------------------
 
-st.markdown(
-    f"### This Week's Highlights"
-)
+st.markdown(f"### This Week's Highlights")
 st.caption(
     f"Week {iso_week}  --  {monday.strftime('%b %d')} to {sunday.strftime('%b %d, %Y')}"
 )
@@ -107,8 +110,8 @@ else:
         # Parse start datetime for display
         try:
             start_dt = datetime.fromisoformat(str(row["start"]).replace("Z", "+00:00"))
-            day_label = start_dt.strftime("%a, %b %d")      # e.g. "Mon, Feb 23"
-            time_label = start_dt.strftime("%H:%M")          # e.g. "09:15"
+            day_label = start_dt.strftime("%a, %b %d")  # e.g. "Mon, Feb 23"
+            time_label = start_dt.strftime("%H:%M")  # e.g. "09:15"
         except (ValueError, TypeError):
             day_label = str(row.get("start_date", ""))
             time_label = ""

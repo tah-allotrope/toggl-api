@@ -1,3 +1,4 @@
+# DEPRECATED: Legacy Streamlit Toggl client. See functions/toggl_client.py.
 """
 Toggl Track API v9 client with rate limiting and retry logic.
 
@@ -26,6 +27,7 @@ def _get_toggl_token() -> str:
     """Resolve TOGGL_API_TOKEN from st.secrets (Streamlit Cloud) or .env."""
     try:
         import streamlit as st
+
         token = st.secrets.get("TOGGL_API_TOKEN", "")
         if token:
             return token
@@ -127,7 +129,9 @@ class RateLimiter:
 
         if len(self._timestamps) >= self.max_per_hour:
             wait_time = self._timestamps[0] - one_hour_ago + 1
-            print(f"[rate-limit] Hourly quota ({self.max_per_hour}/hr) reached. Waiting {wait_time:.0f}s...")
+            print(
+                f"[rate-limit] Hourly quota ({self.max_per_hour}/hr) reached. Waiting {wait_time:.0f}s..."
+            )
             time.sleep(wait_time)
 
         self._last_request = time.time()
@@ -157,7 +161,9 @@ class TogglClient:
     # Low-level HTTP
     # ------------------------------------------------------------------
 
-    def _request(self, method: str, url: str, retries: int = 3, **kwargs) -> requests.Response:
+    def _request(
+        self, method: str, url: str, retries: int = 3, **kwargs
+    ) -> requests.Response:
         """
         Make a rate-limited HTTP request with retry on 429/402.
         Updates the rate limiter's quota ceiling from response headers on each call.
@@ -171,14 +177,18 @@ class TogglClient:
 
             if resp.status_code == 429:
                 wait = int(resp.headers.get("Retry-After", 5))
-                print(f"[429] Rate limited. Retrying in {wait}s (attempt {attempt + 1}/{retries})")
+                print(
+                    f"[429] Rate limited. Retrying in {wait}s (attempt {attempt + 1}/{retries})"
+                )
                 time.sleep(wait)
                 continue
 
             if resp.status_code == 402:
                 remaining = resp.headers.get("X-Toggl-Quota-Remaining", "?")
                 resets_in = resp.headers.get("X-Toggl-Quota-Resets-In", "?")
-                print(f"[402] Quota exceeded. Remaining: {remaining}, resets in: {resets_in}s")
+                print(
+                    f"[402] Quota exceeded. Remaining: {remaining}, resets in: {resets_in}s"
+                )
                 if attempt < retries - 1:
                     wait = int(resets_in) if resets_in != "?" else 120
                     print(f"  Waiting {wait}s before retry...")
@@ -227,7 +237,9 @@ class TogglClient:
         estimated_hours, estimated_seconds, auto_estimates, recurring, and template fields.
         """
         wid = workspace_id or self.get_workspace_id()
-        resp = self._get(f"{API_V9}/workspaces/{wid}/projects", params={"per_page": 200})
+        resp = self._get(
+            f"{API_V9}/workspaces/{wid}/projects", params={"per_page": 200}
+        )
         return resp.json() if resp.status_code == 200 else []
 
     def get_tags(self, workspace_id: int | None = None) -> list[dict]:
@@ -269,7 +281,9 @@ class TogglClient:
             raise
         return []
 
-    def get_all_tasks(self, projects: list[dict], workspace_id: int | None = None) -> list[dict]:
+    def get_all_tasks(
+        self, projects: list[dict], workspace_id: int | None = None
+    ) -> list[dict]:
         """
         Fetch tasks for all projects that have tasks enabled (Premium).
         Skips projects where tasks return 403/404 silently.
@@ -333,7 +347,9 @@ class TogglClient:
         if first_row_number is not None:
             body["first_row_number"] = first_row_number
 
-        resp = self._post(f"{REPORTS_V3}/workspace/{wid}/search/time_entries", json=body)
+        resp = self._post(
+            f"{REPORTS_V3}/workspace/{wid}/search/time_entries", json=body
+        )
         data = resp.json()
         # API returns null on empty result sets
         return (data if isinstance(data, list) else []), dict(resp.headers)
@@ -351,8 +367,11 @@ class TogglClient:
 
         while True:
             rows, headers = self.get_detailed_report_json(
-                start_date, end_date, workspace_id,
-                page_size=50, first_row_number=first_row_number,
+                start_date,
+                end_date,
+                workspace_id,
+                page_size=50,
+                first_row_number=first_row_number,
             )
             if not rows:
                 break
@@ -390,8 +409,12 @@ class TogglClient:
     # ------------------------------------------------------------------
 
     def get_summary_report(
-        self, start_date: str, end_date: str, workspace_id: int | None = None,
-        grouping: str = "projects", sub_grouping: str = "time_entries",
+        self,
+        start_date: str,
+        end_date: str,
+        workspace_id: int | None = None,
+        grouping: str = "projects",
+        sub_grouping: str = "time_entries",
     ) -> list[dict]:
         """Fetch summary report grouped by projects/tags."""
         wid = workspace_id or self.get_workspace_id()
@@ -401,7 +424,9 @@ class TogglClient:
             "grouping": grouping,
             "sub_grouping": sub_grouping,
         }
-        resp = self._post(f"{REPORTS_V3}/workspace/{wid}/summary/time_entries", json=body)
+        resp = self._post(
+            f"{REPORTS_V3}/workspace/{wid}/summary/time_entries", json=body
+        )
         return resp.json()
 
     # ------------------------------------------------------------------
@@ -448,14 +473,14 @@ class TogglClient:
         for row in report_rows:
             # --- Row-level fields (shared across all sub-entries in this row) ---
             tag_ids: list[int] = row.get("tag_ids") or []
-            tag_names: list[str] = [
-                tag_map.get(tid, str(tid)) for tid in tag_ids
-            ]
+            tag_names: list[str] = [tag_map.get(tid, str(tid)) for tid in tag_ids]
 
             task_id: int | None = row.get("task_id")
             task_name: str = ""
             if task_id:
-                _raw_task_name: str | None = task_map.get(task_id) or row.get("task_name")
+                _raw_task_name: str | None = task_map.get(task_id) or row.get(
+                    "task_name"
+                )
                 task_name = _raw_task_name if _raw_task_name is not None else ""
 
             # client_id may appear on the row when enrich_response=True
@@ -471,29 +496,31 @@ class TogglClient:
 
             # --- Expand each nested time entry sub-record ---
             for te in row.get("time_entries", []):
-                flat.append({
-                    # Native Toggl entry ID — the core improvement over CSV
-                    "toggl_id": te.get("id"),
-                    # Keep a synthetic id field for backward compat; callers
-                    # can decide which to use as the SQLite PK during upsert.
-                    "id": te.get("id"),
-                    "description": description,
-                    "start": te.get("start", ""),
-                    "stop": te.get("stop", ""),
-                    "duration": te.get("seconds", 0),
-                    "project_id": project_id,
-                    "project_name": project_name,
-                    "workspace_id": workspace_id,
-                    "tags": tag_names,
-                    "tag_ids": tag_ids,
-                    "billable": billable,
-                    "at": te.get("at", ""),
-                    # New enrichment fields
-                    "task_id": task_id,
-                    "task_name": task_name,
-                    "client_name": client_name,
-                    "user_id": te.get("user_id"),
-                })
+                flat.append(
+                    {
+                        # Native Toggl entry ID — the core improvement over CSV
+                        "toggl_id": te.get("id"),
+                        # Keep a synthetic id field for backward compat; callers
+                        # can decide which to use as the SQLite PK during upsert.
+                        "id": te.get("id"),
+                        "description": description,
+                        "start": te.get("start", ""),
+                        "stop": te.get("stop", ""),
+                        "duration": te.get("seconds", 0),
+                        "project_id": project_id,
+                        "project_name": project_name,
+                        "workspace_id": workspace_id,
+                        "tags": tag_names,
+                        "tag_ids": tag_ids,
+                        "billable": billable,
+                        "at": te.get("at", ""),
+                        # New enrichment fields
+                        "task_id": task_id,
+                        "task_name": task_name,
+                        "client_name": client_name,
+                        "user_id": te.get("user_id"),
+                    }
+                )
         return flat
 
     # ------------------------------------------------------------------
@@ -542,32 +569,38 @@ class TogglClient:
             stop_iso = f"{end_date_str}T{end_time}" if end_date_str else ""
 
             tags_str = row.get("Tags", "")
-            tags = [t.strip() for t in tags_str.split(",") if t.strip()] if tags_str else []
+            tags = (
+                [t.strip() for t in tags_str.split(",") if t.strip()]
+                if tags_str
+                else []
+            )
 
             description = row.get("Description", "")
             project = row.get("Project", "")
             id_seed = f"{start_iso}|{stop_iso}|{description}|{project}|{duration_sec}"
             synth_id = int(hashlib.sha256(id_seed.encode()).hexdigest()[:15], 16)
 
-            entries.append({
-                "id": synth_id,
-                "toggl_id": None,  # CSV path — native ID unknown
-                "description": description,
-                "start": start_iso,
-                "stop": stop_iso,
-                "duration": duration_sec,
-                "project_id": None,
-                "project_name": project,
-                "workspace_id": None,
-                "tags": tags,
-                "tag_ids": [],
-                "billable": row.get("Billable", "No") == "Yes",
-                "at": "",
-                "task_id": None,
-                "task_name": "",
-                "client_name": "",
-                "user_id": None,
-            })
+            entries.append(
+                {
+                    "id": synth_id,
+                    "toggl_id": None,  # CSV path — native ID unknown
+                    "description": description,
+                    "start": start_iso,
+                    "stop": stop_iso,
+                    "duration": duration_sec,
+                    "project_id": None,
+                    "project_name": project,
+                    "workspace_id": None,
+                    "tags": tags,
+                    "tag_ids": [],
+                    "billable": row.get("Billable", "No") == "Yes",
+                    "at": "",
+                    "task_id": None,
+                    "task_name": "",
+                    "client_name": "",
+                    "user_id": None,
+                }
+            )
 
         print(f"  {year}: parsed {len(entries)} entries from CSV")
         return entries
@@ -609,5 +642,7 @@ class TogglClient:
             workspace_id=wid,
         )
 
-        print(f"  {year}: fetched {len(entries)} entries via JSON ({len(rows)} report rows)")
+        print(
+            f"  {year}: fetched {len(entries)} entries via JSON ({len(rows)} report rows)"
+        )
         return entries
