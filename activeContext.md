@@ -62,18 +62,31 @@
 - Hosting URL: `https://toggl-journal.web.app`
 
 ## Blockers / Outstanding
-- Cloud Functions deploy blocked: project needs Blaze (pay-as-you-go) plan for `cloudbuild.googleapis.com`.
 - Firebase Authentication not yet configured (Email/Password provider needs enabling).
-- Toggl API token not yet set as function environment secret.
 - No user created yet for app login.
 - Firestore contains no data yet (migration script not run).
+- Vercel project not yet linked/secrets set.
+- GitHub repository secrets not yet set.
 
 ## Next Actions
-1. Upgrade `toggl-journal` to Blaze plan: https://console.firebase.google.com/project/toggl-journal/usage/details
-2. Enable Firebase Authentication (Email/Password) in Console.
-3. Create first user account for app login.
-4. Set Toggl API token as function secret: `firebase functions:secrets:set TOGGL_API_TOKEN`
-5. Deploy Cloud Functions: `firebase deploy --only functions --project toggl-journal`
-6. (Optional) Run migration script to seed Firestore: `python scripts/migrate_sqlite_to_firestore.py --service-account <path> --project-id toggl-journal`
+1. Enable Firebase Authentication (Email/Password) in Console.
+2. Create first user account for app login.
+3. (Optional) Run migration script to seed Firestore: `python scripts/migrate_sqlite_to_firestore.py --service-account <path> --project-id toggl-journal`
+4. Create a Firebase service account JSON with Firestore write access and add as secret in:
+   - GitHub repo secrets: `FIREBASE_SERVICE_ACCOUNT_JSON`
+   - Vercel env vars: `FIREBASE_SERVICE_ACCOUNT_JSON`
+5. Add GitHub repo secret `TOGGL_API_TOKEN` (your Toggl API token).
+6. Add Vercel env vars:
+   - `TOGGL_API_TOKEN` (same as above)
+   - `ALLOWED_ORIGINS` (e.g., `https://toggl-journal.web.app`)
+   - `GITHUB_OWNER` (your GitHub username or org)
+   - `GITHUB_REPO` (repo name, e.g., `toggl-api`)
+   - `GITHUB_TOKEN` (personal access token with `workflow` scope)
+   - Optional: `GITHUB_REF` (default `main`), `GITHUB_QUICK_WORKFLOW` (default `sync_quick.yml`), `GITHUB_SYNC_WORKFLOW` (default `sync_dispatch.yml`)
+7. Set frontend env var `VITE_API_BASE_URL` to your Vercel API base (e.g., `https://<your-project>.vercel.app/api`).
+8. Deploy frontend: `firebase deploy --only hosting`
+9. Deploy Vercel project (via Vercel dashboard or `vercel --prod`).
+10. Test login and sync flow.
+11. (Optional) Remove `functions/` from `firebase.json` after verifying Vercel endpoints work.
 
 (End of file - total 96 lines)

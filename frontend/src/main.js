@@ -1,9 +1,9 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, onAuthStateChanged } from "firebase/auth";
-import { getFunctions, httpsCallable } from "firebase/functions";
 import { getFirestore } from "firebase/firestore";
 
 import { renderLoginForm, signOut } from "./auth";
+import { triggerSync } from "./api";
 import { renderHomepage } from "./pages/homepage";
 import { renderDashboard } from "./pages/dashboard";
 import { renderRetrospect } from "./pages/retrospect";
@@ -19,7 +19,6 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const functions = getFunctions(app);
 
 const root = document.getElementById("app");
 
@@ -57,15 +56,14 @@ function shellTemplate(currentHash) {
   `;
 }
 
-async function runSync(button, callableName, payload = {}) {
+async function runSync(button, syncType, payload = {}) {
   const original = button.textContent;
   button.disabled = true;
   button.textContent = "Syncing...";
   const status = document.getElementById("sync-status");
   try {
-    const call = httpsCallable(functions, callableName);
-    const result = await call(payload);
-    status.textContent = result?.data?.message || "Sync complete.";
+    const result = await triggerSync(auth, syncType, payload);
+    status.textContent = result?.message || "Sync dispatched.";
   } catch (err) {
     status.textContent = `Sync failed: ${err.message || String(err)}`;
   } finally {
@@ -81,17 +79,17 @@ async function renderRoute() {
 
   document.getElementById("logout").addEventListener("click", () => signOut(app));
   document.getElementById("sync-quick").addEventListener("click", (event) => {
-    runSync(event.currentTarget, "sync_quick");
+    runSync(event.currentTarget, "quick");
   });
   document.getElementById("sync-full").addEventListener("click", (event) => {
-    runSync(event.currentTarget, "sync_full", { earliest_year: 2017 });
+    runSync(event.currentTarget, "full", { earliest_year: 2017 });
   });
   document.getElementById("sync-enriched").addEventListener("click", (event) => {
     const year = Number(document.getElementById("sync-year").value || new Date().getFullYear());
-    runSync(event.currentTarget, "sync_enriched_year", { year });
+    runSync(event.currentTarget, "enriched", { year });
   });
 
-  const ctx = { app, auth, db, functions };
+  const ctx = { app, auth, db };
   if (hash === "#/" || hash === "#/homepage") {
     await renderHomepage(pageRoot, ctx);
     return;

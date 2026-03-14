@@ -1,4 +1,4 @@
-import { httpsCallable } from "firebase/functions";
+import { callApi } from "../api";
 
 const QUICK_QUERIES = [
   "What did I work on today?",
@@ -29,7 +29,6 @@ export async function renderChat(container, ctx) {
     </div>
   `;
 
-  const callChat = httpsCallable(ctx.functions, "chat_answer");
   const chatBox = container.querySelector("#chat-box");
   const input = container.querySelector("#chat-input");
   const sendButton = container.querySelector("#chat-send");
@@ -63,8 +62,8 @@ export async function renderChat(container, ctx) {
     sendButton.textContent = "Thinking...";
 
     try {
-      const result = await callChat({ question });
-      const answer = result?.data?.answer || "No answer returned.";
+      const result = await callApi(ctx.auth, "/chat", { question });
+      const answer = result?.answer || "No answer returned.";
       messages.push({ role: "assistant", content: answer });
     } catch (err) {
       messages.push({ role: "assistant", content: `Error: ${err.message || String(err)}` });

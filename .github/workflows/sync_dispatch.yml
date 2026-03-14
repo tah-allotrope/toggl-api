@@ -1,0 +1,51 @@
+name: Manual Sync
+
+on:
+  workflow_dispatch:
+    inputs:
+      sync_type:
+        description: "Sync type"
+        required: true
+        default: "full"
+        type: choice
+        options:
+          - full
+          - enriched
+      year:
+        description: "Year for enriched sync"
+        required: false
+        type: number
+      earliest_year:
+        description: "Earliest year for full sync"
+        required: false
+        default: "2017"
+        type: string
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r functions/requirements.txt
+
+      - name: Run full sync
+        if: ${{ inputs.sync_type == 'full' }}
+        env:
+          TOGGL_API_TOKEN: ${{ secrets.TOGGL_API_TOKEN }}
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+        run: python scripts/github_sync.py --type full --earliest-year ${{ inputs.earliest_year || '2017' }}
+
+      - name: Run enriched year sync
+        if: ${{ inputs.sync_type == 'enriched' }}
+        env:
+          TOGGL_API_TOKEN: ${{ secrets.TOGGL_API_TOKEN }}
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+        run: python scripts/github_sync.py --type enriched --year ${{ inputs.year }}
