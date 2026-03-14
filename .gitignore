@@ -15,3 +15,4 @@ functions/__pycache__/
 functions/venv/
 *serviceAccountKey*
 *.json.key
+*-firebase-adminsdk-*.json
