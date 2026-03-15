@@ -7,22 +7,20 @@ function endpoint(path) {
   return `${API_BASE_URL}${path}`;
 }
 
-async function authHeaders(auth) {
-  const user = auth.currentUser;
-  if (!user) {
+async function authHeaders(session) {
+  if (!session || !session.access_token) {
     throw new Error("You must be signed in");
   }
-  const token = await user.getIdToken();
   return {
     "Content-Type": "application/json",
-    Authorization: `Bearer ${token}`
+    Authorization: `Bearer ${session.access_token}`
   };
 }
 
-export async function callApi(auth, path, payload = {}) {
+export async function callApi(session, path, payload = {}) {
   const response = await fetch(endpoint(path), {
     method: "POST",
-    headers: await authHeaders(auth),
+    headers: await authHeaders(session),
     body: JSON.stringify(payload)
   });
 
@@ -34,8 +32,8 @@ export async function callApi(auth, path, payload = {}) {
   return body;
 }
 
-export async function triggerSync(auth, syncType, payload = {}) {
-  return callApi(auth, "/sync", {
+export async function triggerSync(session, syncType, payload = {}) {
+  return callApi(session, "/sync", {
     sync_type: syncType,
     ...payload
   });

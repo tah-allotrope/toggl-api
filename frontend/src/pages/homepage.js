@@ -1,5 +1,3 @@
-import { collection, getDocs, query, where } from "firebase/firestore";
-
 import { formatDuration } from "../utils";
 
 function isoWeekOfDate(date) {
@@ -38,16 +36,15 @@ export async function renderHomepage(container, ctx) {
   const currentYear = now.getFullYear();
   const currentWeek = isoWeekOfDate(now);
 
-  const entriesRef = collection(ctx.db, "time_entries");
-  const entriesQuery = query(
-    entriesRef,
-    where("tags_json", "array-contains", "Highlight"),
-    where("start_year", "==", currentYear),
-    where("start_week", "==", currentWeek)
-  );
+  const { data, error } = await ctx.supabase
+    .from('time_entries')
+    .select('*')
+    .eq('start_year', currentYear)
+    .eq('start_week', currentWeek)
+    .like('tags', '%Highlight%');
 
-  const snapshot = await getDocs(entriesQuery);
-  const entries = snapshot.docs.map((doc) => ({ id: doc.id, ...(doc.data() || {}) }));
+  const entries = data || [];
+  
   entries.sort((a, b) => {
     const aStart = toDate(a.start)?.getTime() || 0;
     const bStart = toDate(b.start)?.getTime() || 0;
@@ -63,7 +60,7 @@ export async function renderHomepage(container, ctx) {
     .map((entry) => {
       const start = toDate(entry.start);
       const dateLabel = start ? start.toLocaleDateString() : "Unknown date";
-      const duration = formatDuration(Number(entry.duration_seconds || 0));
+      const duration = formatDuration(Number(entry.duration_seconds || entry.duration || 0));
       const project = entry.project_name || entry.project || "(No Project)";
       const description = entry.description || "(no description)";
       return `

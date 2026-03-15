@@ -1,5 +1,4 @@
 import Plotly from "plotly.js-dist-min";
-import { collection, getDocs, query, where } from "firebase/firestore";
 
 import { COLORS, PLOTLY_LAYOUT } from "../theme";
 
@@ -14,7 +13,7 @@ function toDate(value) {
 }
 
 function hours(entries) {
-  return entries.reduce((sum, entry) => sum + Number(entry.duration_seconds || 0), 0) / 3600;
+  return entries.reduce((sum, entry) => sum + Number(entry.duration_seconds || entry.duration || 0), 0) / 3600;
 }
 
 function byYear(entries) {
@@ -32,15 +31,15 @@ function byYear(entries) {
   return [...map.entries()].sort((a, b) => a[0] - b[0]);
 }
 
-async function availableYears(db) {
-  const snap = await getDocs(collection(db, "time_entries"));
-  const years = snap.docs
-    .map((doc) => Number((doc.data() || {}).start_year || 0))
+async function availableYears(supabase) {
+  const { data } = await supabase.from("time_entries").select("start_year");
+  const years = (data || [])
+    .map((row) => Number(row.start_year || 0))
     .filter((y) => y > 0);
   return [...new Set(years)].sort((a, b) => a - b);
 }
 
-async function renderOnThisDay(section, db) {
+async function renderOnThisDay(section, supabase) {
   section.innerHTML = `
     <div class="panel row">
       <div>
@@ -61,13 +60,12 @@ async function renderOnThisDay(section, db) {
     const month = d.getMonth() + 1;
     const day = d.getDate();
 
-    const entriesQuery = query(
-      collection(db, "time_entries"),
-      where("start_month", "==", month),
-      where("start_day", "==", day)
-    );
-    const snap = await getDocs(entriesQuery);
-    const entries = snap.docs.map((doc) => ({ id: doc.id, ...(doc.data() || {}) }));
+    const { data } = await supabase
+      .from("time_entries")
+      .select("*")
+      .eq("start_month", month)
+      .eq("start_day", day);
+    const entries = data || [];
 
     const grouped = byYear(entries);
     Plotly.newPlot(
@@ -93,7 +91,7 @@ async function renderOnThisDay(section, db) {
       .map(([year, rows]) => {
         const top = rows
           .slice()
-          .sort((a, b) => Number(b.duration_seconds || 0) - Number(a.duration_seconds || 0))[0];
+          .sort((a, b) => Number(b.duration_seconds || b.duration || 0) - Number(a.duration_seconds || a.duration || 0))[0];
         return `
           <details class="panel">
             <summary>${year} — ${hours(rows).toFixed(1)}h (${rows.length} entries)</summary>
@@ -108,7 +106,7 @@ async function renderOnThisDay(section, db) {
   await run();
 }
 
-async function renderWeekView(section, db) {
+async function renderWeekView(section, supabase) {
   section.innerHTML = `
     <div class="panel row">
       <div>
@@ -122,9 +120,8 @@ async function renderWeekView(section, db) {
 
   const run = async () => {
     const week = Number(section.querySelector("#week-input").value || 1);
-    const entriesQuery = query(collection(db, "time_entries"), where("start_week", "==", week));
-    const snap = await getDocs(entriesQuery);
-    const entries = snap.docs.map((doc) => ({ id: doc.id, ...(doc.data() || {}) }));
+    const { data } = await supabase.from("time_entries").select("*").eq("start_week", week);
+    const entries = data || [];
 
     const grouped = byYear(entries);
     Plotly.newPlot(
@@ -151,8 +148,8 @@ async function renderWeekView(section, db) {
   await run();
 }
 
-async function renderYearComparison(section, db) {
-  const years = await availableYears(db);
+async function renderYearComparison(section, supabase) {
+  const years = await availableYears(supabase);
   const fallback = new Date().getFullYear();
   const a = years[years.length - 2] || fallback - 1;
   const b = years[years.length - 1] || fallback;
@@ -176,13 +173,13 @@ async function renderYearComparison(section, db) {
   const run = async () => {
     const yearA = Number(section.querySelector("#year-a").value);
     const yearB = Number(section.querySelector("#year-b").value);
-    const [snapA, snapB] = await Promise.all([
-      getDocs(query(collection(db, "time_entries"), where("start_year", "==", yearA))),
-      getDocs(query(collection(db, "time_entries"), where("start_year", "==", yearB)))
+    const [{ data: dataA }, { data: dataB }] = await Promise.all([
+      supabase.from("time_entries").select("*").eq("start_year", yearA),
+      supabase.from("time_entries").select("*").eq("start_year", yearB)
     ]);
 
-    const entriesA = snapA.docs.map((doc) => ({ id: doc.id, ...(doc.data() || {}) }));
-    const entriesB = snapB.docs.map((doc) => ({ id: doc.id, ...(doc.data() || {}) }));
+    const entriesA = dataA || [];
+    const entriesB = dataB || [];
 
     const monthly = (entries) => {
       const buckets = Array.from({ length: 12 }, () => 0);
@@ -191,7 +188,7 @@ async function renderYearComparison(section, db) {
         if (!d) {
           continue;
         }
-        buckets[d.getMonth()] += Number(entry.duration_seconds || 0) / 3600;
+        buckets[d.getMonth()] += Number(entry.duration_seconds || entry.duration || 0) / 3600;
       }
       return buckets;
     };
@@ -237,9 +234,9 @@ export async function renderRetrospect(container, ctx) {
 
   const content = container.querySelector("#retrospect-content");
 
-  const showOnThisDay = () => renderOnThisDay(content, ctx.db);
-  const showWeek = () => renderWeekView(content, ctx.db);
-  const showCompare = () => renderYearComparison(content, ctx.db);
+  const showOnThisDay = () => renderOnThisDay(content, ctx.supabase);
+  const showWeek = () => renderWeekView(content, ctx.supabase);
+  const showCompare = () => renderYearComparison(content, ctx.supabase);
 
   container.querySelector("#tab-otd").addEventListener("click", showOnThisDay);
   container.querySelector("#tab-week").addEventListener("click", showWeek);

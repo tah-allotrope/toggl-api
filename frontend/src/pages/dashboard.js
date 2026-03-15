@@ -1,5 +1,4 @@
 import Plotly from "plotly.js-dist-min";
-import { collection, getDocs, query, where } from "firebase/firestore";
 
 import { COLORS, PLOTLY_LAYOUT, SCALE_NEON_HEATMAP } from "../theme";
 import { aggregateHours, groupBy } from "../utils";
@@ -31,10 +30,19 @@ function dayIndex(date) {
   return day === 0 ? 6 : day - 1;
 }
 
+function parseTags(tagsStr) {
+  if (!tagsStr) return [];
+  try {
+    return JSON.parse(tagsStr);
+  } catch (e) {
+    return [];
+  }
+}
+
 function renderMetrics(container, entries) {
   const totalHours = aggregateHours(entries);
   const uniqueProjects = new Set(entries.map((e) => e.project_name || e.project || "").filter(Boolean)).size;
-  const uniqueTags = new Set(entries.flatMap((e) => (Array.isArray(e.tags_json) ? e.tags_json : []))).size;
+  const uniqueTags = new Set(entries.flatMap((e) => parseTags(e.tags))).size;
   const entriesCount = entries.length;
 
   const dateSet = new Set();
@@ -61,7 +69,7 @@ function hoursBy(entries, keyFn) {
   const map = new Map();
   for (const entry of entries) {
     const key = keyFn(entry) || "(None)";
-    const hours = Number(entry.duration_seconds || 0) / 3600;
+    const hours = Number(entry.duration_seconds || entry.duration || 0) / 3600;
     map.set(key, (map.get(key) || 0) + hours);
   }
   return [...map.entries()].sort((a, b) => b[1] - a[1]);
@@ -167,7 +175,7 @@ function renderHeatmap(divId, entries) {
     }
     const week = Math.min(Math.max(getWeekNumber(d), 1), 53) - 1;
     const day = dayIndex(d);
-    grid[day][week] += Number(entry.duration_seconds || 0) / 3600;
+    grid[day][week] += Number(entry.duration_seconds || entry.duration || 0) / 3600;
   }
 
   Plotly.newPlot(
@@ -208,27 +216,22 @@ function renderTopDescriptions(container, entries) {
   `;
 }
 
-async function fetchEntries(db, mode, year, startDate, endDate) {
-  const entriesRef = collection(db, "time_entries");
+async function fetchEntries(supabase, mode, year, startDate, endDate) {
+  let query = supabase.from("time_entries").select("*");
   if (mode === "year") {
-    const q = query(entriesRef, where("start_year", "==", Number(year)));
-    const snap = await getDocs(q);
-    return snap.docs.map((doc) => ({ id: doc.id, ...(doc.data() || {}) }));
-  }
-  if (mode === "custom") {
-    const q = query(entriesRef, where("start_date", ">=", startDate), where("start_date", "<=", endDate));
-    const snap = await getDocs(q);
-    return snap.docs.map((doc) => ({ id: doc.id, ...(doc.data() || {}) }));
+    query = query.eq("start_year", Number(year));
+  } else if (mode === "custom") {
+    query = query.gte("start_date", startDate).lte("start_date", endDate);
   }
 
-  const snap = await getDocs(entriesRef);
-  return snap.docs.map((doc) => ({ id: doc.id, ...(doc.data() || {}) }));
+  const { data } = await query;
+  return data || [];
 }
 
-async function getYearBounds(db) {
-  const snap = await getDocs(collection(db, "time_entries"));
-  const years = snap.docs
-    .map((doc) => Number((doc.data() || {}).start_year || 0))
+async function getYearBounds(supabase) {
+  const { data } = await supabase.from("time_entries").select("start_year");
+  const years = (data || [])
+    .map((row) => Number(row.start_year || 0))
     .filter((year) => Number.isFinite(year) && year > 0);
   if (years.length === 0) {
     return { min: new Date().getFullYear(), max: new Date().getFullYear() };
@@ -237,7 +240,7 @@ async function getYearBounds(db) {
 }
 
 export async function renderDashboard(container, ctx) {
-  const bounds = await getYearBounds(ctx.db);
+  const bounds = await getYearBounds(ctx.supabase);
   const thisYear = bounds.max;
 
   container.innerHTML = `
@@ -290,14 +293,14 @@ export async function renderDashboard(container, ctx) {
   const run = async () => {
     const mode = modeEl.value;
     const year = Number(yearEl.value);
-    const entries = await fetchEntries(ctx.db, mode, year, startEl.value, endEl.value);
+    const entries = await fetchEntries(ctx.supabase, mode, year, startEl.value, endEl.value);
 
     renderMetrics(container.querySelector("#dash-metrics"), entries);
     renderBar("chart-project-bar", hoursBy(entries, (entry) => entry.project_name || entry.project), "Project Breakdown", "Hours");
     renderProjectPie("chart-project-pie", hoursBy(entries, (entry) => entry.project_name || entry.project));
     renderBar(
       "chart-tag-bar",
-      hoursBy(entries.flatMap((entry) => (entry.tags_json || []).map((tag) => ({ ...entry, __tag: tag }))), (entry) => entry.__tag),
+      hoursBy(entries.flatMap((entry) => parseTags(entry.tags).map((tag) => ({ ...entry, __tag: tag }))), (entry) => entry.__tag),
       "Tag Breakdown",
       "Hours"
     );

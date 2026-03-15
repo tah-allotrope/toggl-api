@@ -1,7 +1,6 @@
-import { getAuth, signInWithEmailAndPassword, signOut as firebaseSignOut } from "firebase/auth";
+import { createClient } from '@supabase/supabase-js';
 
-export function renderLoginForm(container, firebaseApp, onSuccess) {
-  const auth = getAuth(firebaseApp);
+export function renderLoginForm(container, supabase, onSuccess) {
   container.innerHTML = `
     <div class="main">
       <h2>Login Required</h2>
@@ -28,7 +27,11 @@ export function renderLoginForm(container, firebaseApp, onSuccess) {
     button.disabled = true;
     button.textContent = "Logging in...";
     try {
-      await signInWithEmailAndPassword(auth, emailInput.value.trim(), passwordInput.value);
+      const { error } = await supabase.auth.signInWithPassword({
+        email: emailInput.value.trim(),
+        password: passwordInput.value
+      });
+      if (error) throw error;
       onSuccess();
     } catch (err) {
       errorEl.textContent = err.message || "Login failed.";
@@ -47,7 +50,6 @@ export function renderLoginForm(container, firebaseApp, onSuccess) {
   });
 }
 
-export async function signOut(firebaseApp) {
-  const auth = getAuth(firebaseApp);
-  await firebaseSignOut(auth);
+export async function signOut(supabase) {
+  await supabase.auth.signOut();
 }

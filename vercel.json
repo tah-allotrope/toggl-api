@@ -1,22 +1,7 @@
 {
-  "functions": {
-    "api/chat.py": {
-      "runtime": "python3.12"
-    },
-    "api/stats.py": {
-      "runtime": "python3.12"
-    },
-    "api/status.py": {
-      "runtime": "python3.12"
-    },
-    "api/sync.py": {
-      "runtime": "python3.12"
-    }
-  },
-  "routes": [
-    { "src": "/api/chat", "dest": "api/chat.py" },
-    { "src": "/api/stats", "dest": "api/stats.py" },
-    { "src": "/api/status", "dest": "api/status.py" },
-    { "src": "/api/sync", "dest": "api/sync.py" }
+  "buildCommand": "cd frontend && npm install && npm run build",
+  "outputDirectory": "frontend/dist",
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/index.py" }
   ]
 }

@@ -7,7 +7,6 @@ from datetime import date, datetime, timedelta
 from typing import Any
 
 import pandas as pd
-from firebase_admin import firestore
 
 from data_store import (
     get_all_client_names,
@@ -86,7 +85,7 @@ def _to_df(entries: list[dict[str, Any]]) -> pd.DataFrame:
     return df
 
 
-def _entries_for_year(db: firestore.Client, year: int | None = None) -> pd.DataFrame:
+def _entries_for_year(db, year: int | None = None) -> pd.DataFrame:
     if year is None:
         return _to_df(get_entries(db))
     start = f"{year}-01-01"
@@ -94,7 +93,7 @@ def _entries_for_year(db: firestore.Client, year: int | None = None) -> pd.DataF
     return _to_df(get_entries(db, start_date=start, end_date=end))
 
 
-def answer_question(db: firestore.Client, question: str) -> str:
+def answer_question(db, question: str) -> str:
     q = question.lower().strip()
     known_projects = get_all_project_names(db)
     known_tags = get_all_tag_names(db)
@@ -260,7 +259,7 @@ def answer_question(db: firestore.Client, question: str) -> str:
     return _help_message(known_projects, known_tags)
 
 
-def _answer_totals(db: firestore.Client) -> str:
+def _answer_totals(db) -> str:
     stats = get_total_stats(db)
     return (
         "**All-Time Stats:**\n\n"
@@ -272,7 +271,7 @@ def _answer_totals(db: firestore.Client) -> str:
     )
 
 
-def _answer_year(db: firestore.Client, year: int) -> str:
+def _answer_year(db, year: int) -> str:
     df = _entries_for_year(db, year)
     if df.empty:
         return f"No data found for {year}."
@@ -303,7 +302,7 @@ def _answer_year(db: firestore.Client, year: int) -> str:
     )
 
 
-def _answer_specific_date(db: firestore.Client, year: int, month: int, day: int) -> str:
+def _answer_specific_date(db, year: int, month: int, day: int) -> str:
     target = f"{year}-{month:02d}-{day:02d}"
     df = _to_df(get_entries(db, start_date=target, end_date=target))
     if df.empty:
@@ -322,7 +321,7 @@ def _answer_specific_date(db: firestore.Client, year: int, month: int, day: int)
     )
 
 
-def _answer_date_across_years(db: firestore.Client, month: int, day: int) -> str:
+def _answer_date_across_years(db, month: int, day: int) -> str:
     df = _to_df(get_entries_for_date_across_years(db, month, day))
     if df.empty:
         return f"No entries found for {month:02d}-{day:02d} in any year."
@@ -346,7 +345,7 @@ def _answer_date_across_years(db: firestore.Client, month: int, day: int) -> str
     return f"**On {month:02d}/{day:02d} across all years:**\n\n" + "\n".join(lines)
 
 
-def _answer_month(db: firestore.Client, month: int, year: int | None) -> str:
+def _answer_month(db, month: int, year: int | None) -> str:
     if year is not None:
         start = f"{year}-{month:02d}-01"
         end = f"{year}-{month:02d}-31"
@@ -378,7 +377,7 @@ def _answer_month(db: firestore.Client, month: int, year: int | None) -> str:
     )
 
 
-def _answer_week(db: firestore.Client, week_num: int) -> str:
+def _answer_week(db, week_num: int) -> str:
     df = _to_df(get_entries_for_week_across_years(db, week_num))
     if df.empty:
         return f"No entries found for week {week_num}."
@@ -392,7 +391,7 @@ def _answer_week(db: firestore.Client, week_num: int) -> str:
     return f"**Week {week_num} across all years:**\n\n" + "\n".join(lines)
 
 
-def _answer_project(db: firestore.Client, project_name: str, year: int | None) -> str:
+def _answer_project(db, project_name: str, year: int | None) -> str:
     df = _entries_for_year(db, year)
     if df.empty:
         return f"No entries found for project matching '{project_name}'."
@@ -430,7 +429,7 @@ def _answer_project(db: firestore.Client, project_name: str, year: int | None) -
     )
 
 
-def _answer_tag(db: firestore.Client, tag_name: str, year: int | None) -> str:
+def _answer_tag(db, tag_name: str, year: int | None) -> str:
     entries = get_entries_by_tag(db, tag_name, year=year)
     df = _to_df(entries)
     if df.empty:
@@ -458,7 +457,7 @@ def _answer_tag(db: firestore.Client, tag_name: str, year: int | None) -> str:
     )
 
 
-def _answer_top_projects(db: firestore.Client, year: int | None) -> str:
+def _answer_top_projects(db, year: int | None) -> str:
     df = _entries_for_year(db, year)
     if df.empty:
         return "No data found."
@@ -484,7 +483,7 @@ def _answer_top_projects(db: firestore.Client, year: int | None) -> str:
     return f"**Top 10 Projects ({scope}):**\n\n" + "\n".join(lines)
 
 
-def _answer_top_tags(db: firestore.Client, year: int | None) -> str:
+def _answer_top_tags(db, year: int | None) -> str:
     df = _entries_for_year(db, year)
     if df.empty:
         return "No data found."
@@ -510,7 +509,7 @@ def _answer_top_tags(db: firestore.Client, year: int | None) -> str:
     return f"**Top Tags ({scope}):**\n\n" + "\n".join(lines)
 
 
-def _answer_client(db: firestore.Client, client_name: str, year: int | None) -> str:
+def _answer_client(db, client_name: str, year: int | None) -> str:
     df = _entries_for_year(db, year)
     if "client_name" not in df.columns:
         return "No client data available."
@@ -546,7 +545,7 @@ def _answer_client(db: firestore.Client, client_name: str, year: int | None) -> 
     )
 
 
-def _answer_task(db: firestore.Client, task_name: str, year: int | None) -> str:
+def _answer_task(db, task_name: str, year: int | None) -> str:
     df = _entries_for_year(db, year)
     if "task_name" not in df.columns:
         return "No task data available (requires enrichment sync)."
@@ -579,7 +578,7 @@ def _answer_task(db: firestore.Client, task_name: str, year: int | None) -> str:
     )
 
 
-def _answer_top_tasks(db: firestore.Client, year: int | None) -> str:
+def _answer_top_tasks(db, year: int | None) -> str:
     df = _entries_for_year(db, year)
     if df.empty or "task_name" not in df.columns:
         return "No task data available."
@@ -603,7 +602,7 @@ def _answer_top_tasks(db: firestore.Client, year: int | None) -> str:
     return f"**Top Tasks ({scope}):**\n\n" + "\n".join(lines)
 
 
-def _answer_search(db: firestore.Client, keyword: str) -> str:
+def _answer_search(db, keyword: str) -> str:
     df = _to_df(search_entries(db, keyword))
     if df.empty:
         return f"No entries found matching '{keyword}'."
@@ -624,7 +623,7 @@ def _answer_search(db: firestore.Client, keyword: str) -> str:
     return result
 
 
-def _answer_compare(db: firestore.Client, year_a: int, year_b: int) -> str:
+def _answer_compare(db, year_a: int, year_b: int) -> str:
     df_a = _entries_for_year(db, year_a)
     df_b = _entries_for_year(db, year_b)
 

@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "firebase": "^10.14.0",
+    "@supabase/supabase-js": "^2.99.1",
     "plotly.js-dist-min": "^2.35.0"
   },
   "devDependencies": {

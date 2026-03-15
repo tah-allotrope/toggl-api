@@ -1,89 +1,55 @@
 # Active Context
 
 ## Date
-- 2026-03-14
+- 2026-03-15
 
 ## Current Branch
-- `firebase-migration`
+- `firebase-migration` (Note: Strategy pivoted to Supabase/Vercel)
 
 ## Objective In Progress
-- Migrate app from Streamlit architecture to Firebase architecture on a dedicated branch.
+- Migrate app from Streamlit architecture to a free Supabase (Postgres/Auth) + Vercel (FastAPI/Hosting) architecture.
 
 ## Completed Work
-- Created implementation plan file: `plans/ISSUE-1-streamlit-to-firebase.md`.
-- Created Firebase config/rules/index files:
-  - `firebase.json`
-  - `.firebaserc` (now set to `toggl-journal`)
-  - `firestore.rules`
-  - `firestore.indexes.json`
-- Implemented Cloud Functions backend scaffold under `functions/`:
-  - `functions/main.py` (with lazy imports for emulator compatibility)
-  - `functions/toggl_client.py`
-  - `functions/data_store.py`
-  - `functions/sync_engine.py`
-  - `functions/chat_engine.py`
-  - `functions/requirements.txt`
-  - `functions/venv/` (created for emulator)
-- Implemented frontend SPA scaffold under `frontend/`:
-  - `frontend/package.json`, `frontend/vite.config.js`, `frontend/index.html`
-  - `frontend/src/main.js`, `frontend/src/auth.js`
-  - `frontend/src/pages/homepage.js`
-  - `frontend/src/pages/dashboard.js`
-  - `frontend/src/pages/retrospect.js`
-  - `frontend/src/pages/chat.js`
-  - `frontend/src/theme.js`, `frontend/src/styles.css`, `frontend/src/utils.js`
-  - `frontend/.env.example`, `frontend/.env` (with real Firebase SDK config)
-- Added one-time migration script:
-  - `scripts/migrate_sqlite_to_firestore.py`
-- Updated project metadata/config docs:
-  - `AGENTS.md` (Firebase stack/commands/architecture setup)
-  - `requirements.txt` (added `firebase-admin`)
-  - `.env.example` (Firebase variables)
-  - `.gitignore` (frontend/functions/firebase/key ignores, added `frontend/.env`, excluded Firebase admin JSON keys)
-- Added deprecation headers to legacy Streamlit files:
-  - `app.py`
-  - `pages/0_Homepage.py`, `pages/1_Dashboard.py`, `pages/2_Retrospect.py`, `pages/3_Chat.py`
-  - `src/data_store.py`, `src/sync.py`, `src/toggl_client.py`, `src/queries.py`, `src/theme.py`
-- Setup Authentication: Enabled Firebase Email/Password provider and created primary user (`tah@allotropevc.com`).
-- Service Account: Generated Firebase Service Account JSON key locally and successfully gitignored it.
-- Initial Migration Run: Executed SQLite to Firestore migration script (successfully migrated first 20,000 time entries before hitting quota limits).
+### 1. Pivot to Supabase & Vercel
+- Abandoned Firebase due to credit card requirements for Cloud Functions and free-tier write quotas (20k/day).
+- Provisioned Supabase project (`itxfaxlnlbzbddyvqvwd`).
+- Created `scripts/migrate_sqlite_to_supabase.py` and successfully migrated all **56,727 time entries** to Postgres.
+- Created primary user account in Supabase Auth.
+
+### 2. Backend Migration (FastAPI on Vercel)
+- Implemented `api/index.py` as a consolidated FastAPI entry point.
+- Adapted `api/data_store.py`, `api/sync_engine.py`, and `api/chat_engine.py` to use PostgreSQL (psycopg2) instead of Firestore.
+- Configured Vercel environment variables (`SUPABASE_URL`, `SUPABASE_KEY`, `DATABASE_URL`).
+- Pruned `requirements.txt` to exclude heavy local analysis libraries (`scipy`, `scikit-learn`) to stay under the 500MB Lambda limit.
+
+### 3. Frontend Migration (Vite on Vercel)
+- Swapped Firebase SDK for `@supabase/supabase-js`.
+- Updated `frontend/src/auth.js` and `frontend/src/main.js` for Supabase Authentication.
+- Rewrote `homepage.js`, `dashboard.js`, and `retrospect.js` to query Supabase Postgres via the JS client.
+- Integrated frontend build (`npm run build`) into the Vercel deployment pipeline.
+
+### 4. Repository Cleanup & Reorganization
+- Deleted all Firebase config files (`firebase.json`, `.firebaserc`, rules, indexes).
+- Moved legacy Streamlit code (`app.py`, `pages/`, `src/`) to `legacy/`.
+- Removed root-level `node_modules`, `package.json`, and temporary test scripts.
+- Updated `.gitignore` to silence build artifacts and Vercel caches.
 
 ## Validation Completed
-- Python syntax compile check passed for new backend/migration files.
-- Frontend dependency install completed.
-- Frontend production build completed (`vite build` successful).
-- Java installed globally (`openjdk 21.0.10`).
-- Firebase emulator smoke tests passed.
-- Firestore rules and indexes deployed to `toggl-journal`.
-- Hosting deployed: `https://toggl-journal.web.app`
+- **Data Integrity:** 100% of SQLite data migrated to Supabase Postgres.
+- **Backend Health:** Deployed FastAPI backend is live and reachable at `/api/health`.
+- **Backend Security:** API endpoints are guarded; return `401 Unauthorized` without a valid token.
+- **Frontend Build:** Local and remote Vite builds succeed.
 
-## Project Resources Created
-- Firebase Project ID: `toggl-journal`
-- Firebase Web App: `toggl-journal-web` (App ID: `1:998696710377:web:6a87f559f71dbe8c854078`)
-- Hosting URL: `https://toggl-journal.web.app`
+## Project Resources
+- Supabase Project ID: `itxfaxlnlbzbddyvqvwd`
+- Vercel URL: `https://toggl-api.vercel.app`
 
 ## Blockers / Outstanding
-- Firestore migration is incomplete due to Firebase Free (Spark) tier limits (max 20,000 document writes/day). The script hit `429 Quota exceeded` exactly after 20,000 writes.
-- Firebase project must be upgraded to the Blaze plan to migrate the remaining ~36,000 entries.
-- Vercel project not yet linked/secrets set.
-- GitHub repository secrets not yet set.
+- **Vercel Routing Conflict:** The FastAPI backend is currently intercepting the root `/` path, resulting in a JSON "Not Found" error instead of serving the static `index.html`. 
+- **SPA Rewrites:** Need to ensure Vercel correctly serves `index.html` for all non-API paths while keeping `/api/*` routed to the Python backend.
 
 ## Next Actions
-1. Upgrade Firebase project `toggl-journal` to the **Blaze (Pay-as-you-go) plan** in the Firebase Console to lift the 20,000 writes/day quota limit.
-2. Re-run migration script to seed the remaining ~36,000 time entries to Firestore: `python scripts/migrate_sqlite_to_firestore.py --service-account toggl-journal-firebase-adminsdk-fbsvc-d6ddf38769.json --project-id toggl-journal`
-3. Add the generated Firebase Service Account JSON as a secret in:
-   - GitHub repo secrets: `FIREBASE_SERVICE_ACCOUNT_JSON`
-   - Vercel env vars: `FIREBASE_SERVICE_ACCOUNT_JSON`
-4. Add GitHub repo secret `TOGGL_API_TOKEN` (your Toggl API token).
-5. Add Vercel env vars:
-   - `TOGGL_API_TOKEN` (same as above)
-   - `ALLOWED_ORIGINS` (e.g., `https://toggl-journal.web.app`)
-   - `GITHUB_OWNER` (your GitHub username or org)
-   - `GITHUB_REPO` (repo name, e.g., `toggl-api`)
-   - `GITHUB_TOKEN` (personal access token with `workflow` scope)
-   - Optional: `GITHUB_REF` (default `main`), `GITHUB_QUICK_WORKFLOW` (default `sync_quick.yml`), `GITHUB_SYNC_WORKFLOW` (default `sync_dispatch.yml`)
-6. Set frontend env var `VITE_API_BASE_URL` to your Vercel API base (e.g., `https://<your-project>.vercel.app/api`).
-7. Deploy frontend: `firebase deploy --only hosting`
-8. Deploy Vercel project (via Vercel dashboard or `vercel --prod`).
-9. Test login and sync flow.
-10. (Optional) Remove `functions/` from `firebase.json` after verifying Vercel endpoints work.
+1. Fix Vercel routing to allow the static frontend to load at the root URL.
+2. Verify frontend-to-backend communication (Sync buttons, Chat).
+3. Confirm Dashboard charts render correctly with Supabase data.
+4. (Optional) Final cleanup of `api/` directory (remove any unused `.pyc` or redundant files).

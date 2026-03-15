@@ -1,6 +1,4 @@
-import { initializeApp } from "firebase/app";
-import { getAuth, onAuthStateChanged } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { createClient } from '@supabase/supabase-js';
 
 import { renderLoginForm, signOut } from "./auth";
 import { triggerSync } from "./api";
@@ -9,16 +7,10 @@ import { renderDashboard } from "./pages/dashboard";
 import { renderRetrospect } from "./pages/retrospect";
 import { renderChat } from "./pages/chat";
 
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID
-};
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 const root = document.getElementById("app");
 
@@ -62,7 +54,8 @@ async function runSync(button, syncType, payload = {}) {
   button.textContent = "Syncing...";
   const status = document.getElementById("sync-status");
   try {
-    const result = await triggerSync(auth, syncType, payload);
+    const { data: { session } } = await supabase.auth.getSession();
+    const result = await triggerSync(session, syncType, payload);
     status.textContent = result?.message || "Sync dispatched.";
   } catch (err) {
     status.textContent = `Sync failed: ${err.message || String(err)}`;
@@ -77,7 +70,7 @@ async function renderRoute() {
   root.innerHTML = shellTemplate(hash);
   const pageRoot = document.getElementById("page-root");
 
-  document.getElementById("logout").addEventListener("click", () => signOut(app));
+  document.getElementById("logout").addEventListener("click", () => signOut(supabase));
   document.getElementById("sync-quick").addEventListener("click", (event) => {
     runSync(event.currentTarget, "quick");
   });
@@ -89,7 +82,7 @@ async function renderRoute() {
     runSync(event.currentTarget, "enriched", { year });
   });
 
-  const ctx = { app, auth, db };
+  const ctx = { supabase };
   if (hash === "#/" || hash === "#/homepage") {
     await renderHomepage(pageRoot, ctx);
     return;
@@ -110,19 +103,20 @@ async function renderRoute() {
   pageRoot.innerHTML = "<h2>Not Found</h2><p class='muted'>Unknown route.</p>";
 }
 
-onAuthStateChanged(auth, (user) => {
-  if (!user) {
-    renderLoginForm(root, app, () => {
+supabase.auth.onAuthStateChange((event, session) => {
+  if (event === 'SIGNED_OUT' || !session) {
+    renderLoginForm(root, supabase, () => {
       window.location.hash = "#/homepage";
       renderRoute();
     });
-    return;
+  } else if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+    renderRoute();
   }
-  renderRoute();
 });
 
-window.addEventListener("hashchange", () => {
-  if (auth.currentUser) {
+window.addEventListener("hashchange", async () => {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session) {
     renderRoute();
   }
 });
