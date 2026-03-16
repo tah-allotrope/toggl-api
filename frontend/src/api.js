@@ -1,9 +1,6 @@
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "/api").replace(/\/$/, "");
 
 function endpoint(path) {
-  if (!API_BASE_URL) {
-    throw new Error("VITE_API_BASE_URL is not configured");
-  }
   return `${API_BASE_URL}${path}`;
 }
 

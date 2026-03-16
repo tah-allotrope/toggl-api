@@ -1,22 +1,41 @@
-import { createClient } from '@supabase/supabase-js';
+function normalizeAuthError(err) {
+  const raw = (err?.message || "").toLowerCase();
+  if (!raw) {
+    return "Login failed. Please try again.";
+  }
+  if (raw.includes("forbidden use of secret api key")) {
+    return "Login is temporarily unavailable due to a server configuration issue. Please contact the app owner.";
+  }
+  if (raw.includes("invalid login credentials") || raw.includes("invalid_grant")) {
+    return "Invalid email or password.";
+  }
+  if (raw.includes("email") && raw.includes("not confirmed")) {
+    return "Please confirm your email before logging in.";
+  }
+  if (raw.includes("network") || raw.includes("fetch")) {
+    return "Network error while logging in. Please check your connection and retry.";
+  }
+  return err.message || "Login failed. Please try again.";
+}
 
-export function renderLoginForm(container, supabase, onSuccess) {
+export function renderLoginForm(container, supabase, onSuccess, initialError = "") {
   container.innerHTML = `
     <div class="main">
       <h2>Login Required</h2>
-      <div class="panel" style="max-width: 460px;">
+      <form id="login-form" class="panel" style="max-width: 460px;">
         <label for="email">Email</label>
-        <input id="email" type="email" placeholder="you@example.com" />
+        <input id="email" name="email" type="email" autocomplete="email" placeholder="you@example.com" required />
         <div style="height: 10px;"></div>
         <label for="password">Password</label>
-        <input id="password" type="password" placeholder="Password" />
+        <input id="password" name="password" type="password" autocomplete="current-password" placeholder="Password" required />
         <div style="height: 12px;"></div>
-        <button id="login-btn" class="button">Login</button>
-        <p id="login-error" class="error" style="display: none;"></p>
-      </div>
+        <button id="login-btn" class="button" type="submit">Login</button>
+        <p id="login-error" class="error" role="alert" aria-live="polite" style="display: ${initialError ? "block" : "none"};">${initialError}</p>
+      </form>
     </div>
   `;
 
+  const form = container.querySelector("#login-form");
   const emailInput = container.querySelector("#email");
   const passwordInput = container.querySelector("#password");
   const button = container.querySelector("#login-btn");
@@ -29,12 +48,12 @@ export function renderLoginForm(container, supabase, onSuccess) {
     try {
       const { error } = await supabase.auth.signInWithPassword({
         email: emailInput.value.trim(),
-        password: passwordInput.value
+        password: passwordInput.value,
       });
       if (error) throw error;
       onSuccess();
     } catch (err) {
-      errorEl.textContent = err.message || "Login failed.";
+      errorEl.textContent = normalizeAuthError(err);
       errorEl.style.display = "block";
     } finally {
       button.disabled = false;
@@ -42,11 +61,14 @@ export function renderLoginForm(container, supabase, onSuccess) {
     }
   };
 
-  button.addEventListener("click", submit);
-  passwordInput.addEventListener("keydown", (event) => {
-    if (event.key === "Enter") {
-      submit();
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    if (!emailInput.value.trim() || !passwordInput.value) {
+      errorEl.textContent = "Please enter your email and password.";
+      errorEl.style.display = "block";
+      return;
     }
+    submit();
   });
 }
 

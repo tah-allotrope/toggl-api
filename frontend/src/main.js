@@ -10,9 +10,30 @@ import { renderChat } from "./pages/chat";
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-const supabase = createClient(supabaseUrl, supabaseKey);
+function renderBootError(message) {
+  root.innerHTML = `
+    <div class="main">
+      <h2>Configuration Error</h2>
+      <div class="panel" style="max-width: 600px;">
+        <p class="error">${message}</p>
+      </div>
+    </div>
+  `;
+}
 
 const root = document.getElementById("app");
+
+if (!supabaseUrl || !supabaseKey) {
+  renderBootError("Missing Supabase frontend environment variables. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
+  throw new Error("Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY");
+}
+
+if (supabaseKey.startsWith("sb_secret_")) {
+  renderBootError("Frontend is configured with a secret Supabase key. Replace it with the Supabase anon/publishable key.");
+  throw new Error("Unsafe Supabase key configured in frontend");
+}
+
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 function navLink(hash, label, currentHash) {
   const active = currentHash === hash || (hash === "#/homepage" && (currentHash === "#/" || !currentHash));

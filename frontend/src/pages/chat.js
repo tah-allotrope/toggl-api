@@ -62,7 +62,10 @@ export async function renderChat(container, ctx) {
     sendButton.textContent = "Thinking...";
 
     try {
-      const result = await callApi(ctx.auth, "/chat", { question });
+      const {
+        data: { session }
+      } = await ctx.supabase.auth.getSession();
+      const result = await callApi(session, "/chat", { question });
       const answer = result?.answer || "No answer returned.";
       messages.push({ role: "assistant", content: answer });
     } catch (err) {
