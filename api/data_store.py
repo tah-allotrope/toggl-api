@@ -24,10 +24,10 @@ def _parse_iso_datetime(value: str | None) -> datetime | None:
 def upsert_time_entries_pg(conn, entries: list[dict[str, Any]]) -> int:
     if not entries:
         return 0
-    
+
     written = 0
     data_to_upsert = []
-    
+
     for entry in entries:
         toggl_id = entry.get("toggl_id")
         doc_id = toggl_id if toggl_id is not None else entry.get("id")
@@ -87,9 +87,15 @@ def upsert_time_entries_pg(conn, entries: list[dict[str, Any]]) -> int:
         ON CONFLICT (id) DO UPDATE SET
         {", ".join([f"{c} = EXCLUDED.{c}" for c in cols if c != "id"])}
     """
-    
+
     with conn.cursor() as cur:
-        execute_values(cur, upsert_query, data_to_upsert, template=f"({placeholders})", page_size=500)
+        execute_values(
+            cur,
+            upsert_query,
+            data_to_upsert,
+            template=f"({placeholders})",
+            page_size=500,
+        )
         written = len(data_to_upsert)
     conn.commit()
     return written
@@ -100,41 +106,62 @@ def upsert_projects_pg(conn, projects: list[dict[str, Any]]) -> int:
         return 0
     data = []
     for p in projects:
-        if p.get("id") is None: continue
-        data.append({
-            "id": p["id"],
-            "name": p.get("name", ""),
-            "workspace_id": p.get("workspace_id") or p.get("wid"),
-            "color": p.get("color", ""),
-            "active": int(bool(p.get("active", True))),
-            "billable": int(bool(p.get("billable", False))),
-            "client_id": p.get("client_id"),
-            "at": p.get("at")
-        })
-    if not data: return 0
+        if p.get("id") is None:
+            continue
+        data.append(
+            {
+                "id": p["id"],
+                "name": p.get("name", ""),
+                "workspace_id": p.get("workspace_id") or p.get("wid"),
+                "color": p.get("color", ""),
+                "active": int(bool(p.get("active", True))),
+                "billable": int(bool(p.get("billable", False))),
+                "client_id": p.get("client_id"),
+                "at": p.get("at"),
+            }
+        )
+    if not data:
+        return 0
     cols = list(data[0].keys())
-    query = f"INSERT INTO projects ({', '.join(cols)}) VALUES %s ON CONFLICT (id) DO UPDATE SET {', '.join([f'{c}=EXCLUDED.{c}' for c in cols if c!='id'])}"
+    query = f"INSERT INTO projects ({', '.join(cols)}) VALUES %s ON CONFLICT (id) DO UPDATE SET {', '.join([f'{c}=EXCLUDED.{c}' for c in cols if c != 'id'])}"
     with conn.cursor() as cur:
-        execute_values(cur, query, data, template=f"({', '.join([f'%({c})s' for c in cols])})")
+        execute_values(
+            cur, query, data, template=f"({', '.join([f'%({c})s' for c in cols])})"
+        )
     conn.commit()
     return len(data)
 
 
 def upsert_tags_pg(conn, tags: list[dict[str, Any]]) -> int:
-    if not tags: return 0
-    data = [{"id": t["id"], "name": t.get("name", ""), "workspace_id": t.get("workspace_id") or t.get("wid")} for t in tags if t.get("id")]
-    if not data: return 0
+    if not tags:
+        return 0
+    data = [
+        {
+            "id": t["id"],
+            "name": t.get("name", ""),
+            "workspace_id": t.get("workspace_id") or t.get("wid"),
+        }
+        for t in tags
+        if t.get("id")
+    ]
+    if not data:
+        return 0
     cols = list(data[0].keys())
-    query = f"INSERT INTO tags ({', '.join(cols)}) VALUES %s ON CONFLICT (id) DO UPDATE SET {', '.join([f'{c}=EXCLUDED.{c}' for c in cols if c!='id'])}"
+    query = f"INSERT INTO tags ({', '.join(cols)}) VALUES %s ON CONFLICT (id) DO UPDATE SET {', '.join([f'{c}=EXCLUDED.{c}' for c in cols if c != 'id'])}"
     with conn.cursor() as cur:
-        execute_values(cur, query, data, template=f"({', '.join([f'%({c})s' for c in cols])})")
+        execute_values(
+            cur, query, data, template=f"({', '.join([f'%({c})s' for c in cols])})"
+        )
     conn.commit()
     return len(data)
 
 
 def set_sync_meta(conn, key: str, value: str) -> None:
     with conn.cursor() as cur:
-        cur.execute("INSERT INTO sync_meta (key, value) VALUES (%s, %s) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value", (key, value))
+        cur.execute(
+            "INSERT INTO sync_meta (key, value) VALUES (%s, %s) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value",
+            (key, value),
+        )
     conn.commit()
 
 
@@ -145,7 +172,9 @@ def get_sync_meta(conn, key: str) -> str | None:
         return row["value"] if row else None
 
 
-def get_entries(conn, start_date=None, end_date=None, project=None, tag=None) -> list[dict]:
+def get_entries(
+    conn, start_date=None, end_date=None, project=None, tag=None
+) -> list[dict]:
     query = "SELECT * FROM time_entries WHERE 1=1"
     params = []
     if start_date:
@@ -166,28 +195,51 @@ def get_entries(conn, start_date=None, end_date=None, project=None, tag=None) ->
         return cur.fetchall()
 
 
+def get_entries_by_tag(conn, tag_name: str, year: int | None = None) -> list[dict]:
+    query = "SELECT * FROM time_entries WHERE tags LIKE %s"
+    params: list[Any] = [f'%"{tag_name}"%']
+    if year is not None:
+        query += " AND start_year = %s"
+        params.append(year)
+    query += " ORDER BY start ASC"
+    with conn.cursor() as cur:
+        cur.execute(query, params)
+        return cur.fetchall()
+
+
 def get_entries_for_date_across_years(conn, month: int, day: int) -> list[dict]:
     with conn.cursor() as cur:
-        cur.execute("SELECT * FROM time_entries WHERE start_month = %s AND start_day = %s ORDER BY start_year ASC, start ASC", (month, day))
+        cur.execute(
+            "SELECT * FROM time_entries WHERE start_month = %s AND start_day = %s ORDER BY start_year ASC, start ASC",
+            (month, day),
+        )
         return cur.fetchall()
 
 
 def get_entries_for_week_across_years(conn, week: int) -> list[dict]:
     with conn.cursor() as cur:
-        cur.execute("SELECT * FROM time_entries WHERE start_week = %s ORDER BY start_year ASC, start ASC", (week,))
+        cur.execute(
+            "SELECT * FROM time_entries WHERE start_week = %s ORDER BY start_year ASC, start ASC",
+            (week,),
+        )
         return cur.fetchall()
 
 
 def search_entries(conn, keyword: str) -> list[dict]:
     needle = f"%{keyword.lower()}%"
     with conn.cursor() as cur:
-        cur.execute("SELECT * FROM time_entries WHERE LOWER(description) LIKE %s OR LOWER(project_name) LIKE %s OR LOWER(client_name) LIKE %s OR LOWER(tags) LIKE %s ORDER BY start DESC", (needle, needle, needle, needle))
+        cur.execute(
+            "SELECT * FROM time_entries WHERE LOWER(description) LIKE %s OR LOWER(project_name) LIKE %s OR LOWER(client_name) LIKE %s OR LOWER(tags) LIKE %s ORDER BY start DESC",
+            (needle, needle, needle, needle),
+        )
         return cur.fetchall()
 
 
 def get_total_stats(conn) -> dict:
     with conn.cursor() as cur:
-        cur.execute("SELECT COUNT(*) as total_entries, SUM(duration_hours) as total_hours, MIN(start_date) as earliest_date, MAX(start_date) as latest_date, COUNT(DISTINCT project_name) as unique_projects, COUNT(DISTINCT start_year) as years_tracked FROM time_entries WHERE duration_hours > 0")
+        cur.execute(
+            "SELECT COUNT(*) as total_entries, SUM(duration_hours) as total_hours, MIN(start_date) as earliest_date, MAX(start_date) as latest_date, COUNT(DISTINCT project_name) as unique_projects, COUNT(DISTINCT start_year) as years_tracked FROM time_entries WHERE duration_hours > 0"
+        )
         return dict(cur.fetchone())
 
 
@@ -199,13 +251,15 @@ def get_sync_status(conn) -> dict:
     return {
         "last_csv_sync": get_sync_meta(conn, "last_csv_sync"),
         "last_enriched_sync": get_sync_meta(conn, "last_enriched_sync"),
-        "enrichment_earliest_year": get_sync_meta(conn, "enrichment_earliest_year")
+        "enrichment_earliest_year": get_sync_meta(conn, "enrichment_earliest_year"),
     }
 
 
 def get_all_project_names(conn) -> list[str]:
     with conn.cursor() as cur:
-        cur.execute("SELECT DISTINCT project_name FROM time_entries WHERE project_name IS NOT NULL AND project_name != '' ORDER BY project_name")
+        cur.execute(
+            "SELECT DISTINCT project_name FROM time_entries WHERE project_name IS NOT NULL AND project_name != '' ORDER BY project_name"
+        )
         return [row["project_name"] for row in cur.fetchall()]
 
 
@@ -217,5 +271,7 @@ def get_all_tag_names(conn) -> list[str]:
 
 def get_all_client_names(conn) -> list[str]:
     with conn.cursor() as cur:
-        cur.execute("SELECT DISTINCT client_name FROM time_entries WHERE client_name IS NOT NULL AND client_name != '' ORDER BY client_name")
+        cur.execute(
+            "SELECT DISTINCT client_name FROM time_entries WHERE client_name IS NOT NULL AND client_name != '' ORDER BY client_name"
+        )
         return [row["client_name"] for row in cur.fetchall()]

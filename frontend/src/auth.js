@@ -7,7 +7,7 @@ function normalizeAuthError(err) {
     return "Login is temporarily unavailable due to a server configuration issue. Please contact the app owner.";
   }
   if (raw.includes("invalid login credentials") || raw.includes("invalid_grant")) {
-    return "Invalid email or password.";
+    return "Invalid password.";
   }
   if (raw.includes("email") && raw.includes("not confirmed")) {
     return "Please confirm your email before logging in.";
@@ -18,14 +18,11 @@ function normalizeAuthError(err) {
   return err.message || "Login failed. Please try again.";
 }
 
-export function renderLoginForm(container, supabase, onSuccess, initialError = "") {
+export function renderLoginForm(container, supabase, onSuccess, loginEmail, initialError = "") {
   container.innerHTML = `
     <div class="main">
       <h2>Login Required</h2>
       <form id="login-form" class="panel" style="max-width: 460px;">
-        <label for="email">Email</label>
-        <input id="email" name="email" type="email" autocomplete="email" placeholder="you@example.com" required />
-        <div style="height: 10px;"></div>
         <label for="password">Password</label>
         <input id="password" name="password" type="password" autocomplete="current-password" placeholder="Password" required />
         <div style="height: 12px;"></div>
@@ -36,7 +33,6 @@ export function renderLoginForm(container, supabase, onSuccess, initialError = "
   `;
 
   const form = container.querySelector("#login-form");
-  const emailInput = container.querySelector("#email");
   const passwordInput = container.querySelector("#password");
   const button = container.querySelector("#login-btn");
   const errorEl = container.querySelector("#login-error");
@@ -47,7 +43,7 @@ export function renderLoginForm(container, supabase, onSuccess, initialError = "
     button.textContent = "Logging in...";
     try {
       const { error } = await supabase.auth.signInWithPassword({
-        email: emailInput.value.trim(),
+        email: loginEmail,
         password: passwordInput.value,
       });
       if (error) throw error;
@@ -63,8 +59,8 @@ export function renderLoginForm(container, supabase, onSuccess, initialError = "
 
   form.addEventListener("submit", (event) => {
     event.preventDefault();
-    if (!emailInput.value.trim() || !passwordInput.value) {
-      errorEl.textContent = "Please enter your email and password.";
+    if (!passwordInput.value) {
+      errorEl.textContent = "Please enter your password.";
       errorEl.style.display = "block";
       return;
     }

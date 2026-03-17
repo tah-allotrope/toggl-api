@@ -1,8 +1,10 @@
 from __future__ import annotations
 import os
+import socket
 import sys
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qs, unquote, urlparse
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -43,12 +45,51 @@ class SyncRequest(BaseModel):
 # --- DATABASE HELPERS ---
 def get_db_connection():
     import psycopg2
+    from psycopg2 import OperationalError
     from psycopg2.extras import RealDictCursor
 
-    db_url = os.environ.get("DATABASE_URL")
+    db_url = (os.environ.get("DATABASE_URL") or "").strip()
     if not db_url:
         raise RuntimeError("DATABASE_URL is required")
-    return psycopg2.connect(db_url, cursor_factory=RealDictCursor)
+
+    try:
+        return psycopg2.connect(db_url, cursor_factory=RealDictCursor)
+    except OperationalError as exc:
+        message = str(exc)
+        if "Cannot assign requested address" not in message or not db_url.startswith(
+            ("postgres://", "postgresql://")
+        ):
+            raise
+
+        parsed = urlparse(db_url)
+        hostname = parsed.hostname
+        if not hostname:
+            raise
+
+        port = parsed.port or 5432
+        ipv4_info = socket.getaddrinfo(
+            hostname, port, socket.AF_INET, socket.SOCK_STREAM
+        )
+        if not ipv4_info:
+            raise
+
+        hostaddr = ipv4_info[0][4][0]
+        query = parse_qs(parsed.query)
+        sslmode = query.get("sslmode", [None])[0]
+
+        connect_kwargs: dict[str, Any] = {
+            "dbname": parsed.path.lstrip("/") or "postgres",
+            "user": unquote(parsed.username or ""),
+            "password": unquote(parsed.password or ""),
+            "host": hostname,
+            "hostaddr": hostaddr,
+            "port": port,
+            "cursor_factory": RealDictCursor,
+        }
+        if sslmode:
+            connect_kwargs["sslmode"] = sslmode
+
+        return psycopg2.connect(**connect_kwargs)
 
 
 async def require_auth(request: Request) -> dict[str, Any]:
@@ -58,14 +99,15 @@ async def require_auth(request: Request) -> dict[str, Any]:
     if not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing bearer token")
     token = auth_header[7:].strip()
-    url = os.environ.get("SUPABASE_URL", "")
-    key = os.environ.get("SUPABASE_KEY", "")
+    url = (os.environ.get("SUPABASE_URL") or "").strip()
+    key = (os.environ.get("SUPABASE_KEY") or "").strip()
     supabase = create_client(url, key)
     try:
         res = supabase.auth.get_user(token)
-        if not res.user:
+        user = getattr(res, "user", None)
+        if not user:
             raise HTTPException(status_code=401, detail="Invalid auth token")
-        return {"uid": res.user.id, "email": res.user.email}
+        return {"uid": user.id, "email": user.email}
     except Exception as exc:
         raise HTTPException(status_code=401, detail="Invalid auth token") from exc
 

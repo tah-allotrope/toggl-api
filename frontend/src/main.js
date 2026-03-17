@@ -9,6 +9,7 @@ import { renderChat } from "./pages/chat";
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const loginEmail = (import.meta.env.VITE_LOGIN_EMAIL || "").trim();
 
 function renderBootError(message) {
   root.innerHTML = `
@@ -26,6 +27,11 @@ const root = document.getElementById("app");
 if (!supabaseUrl || !supabaseKey) {
   renderBootError("Missing Supabase frontend environment variables. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
   throw new Error("Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY");
+}
+
+if (!loginEmail || !loginEmail.includes("@")) {
+  renderBootError("Missing login configuration. Set VITE_LOGIN_EMAIL to your fixed account email.");
+  throw new Error("Missing or invalid VITE_LOGIN_EMAIL");
 }
 
 if (supabaseKey.startsWith("sb_secret_")) {
@@ -129,7 +135,7 @@ supabase.auth.onAuthStateChange((event, session) => {
     renderLoginForm(root, supabase, () => {
       window.location.hash = "#/homepage";
       renderRoute();
-    });
+    }, loginEmail);
   } else if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
     renderRoute();
   }
