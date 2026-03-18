@@ -1,0 +1,37 @@
+name: Sync Full/Enriched
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Sync Mode'
+        required: true
+        default: 'full'
+        type: choice
+        options:
+          - full
+          - enriched
+      earliest_year:
+        description: 'Earliest Year to Sync'
+        required: true
+        default: '2020'
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install psycopg[binary]
+      - name: Run full/enriched sync
+        env:
+          TOGGL_API_TOKEN: ${{ secrets.TOGGL_API_TOKEN }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: python scripts/sync_to_supabase.py --mode ${{ github.event.inputs.mode }} --earliest-year ${{ github.event.inputs.earliest_year }}

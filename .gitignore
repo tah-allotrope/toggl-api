@@ -1,4 +1,5 @@
 .env
+.env.*
 data/
 __pycache__/
 *.pyc
@@ -7,3 +8,12 @@ __pycache__/
 streamlit.log
 .claude/
 analysis/output/
+
+# Supabase
+.supabase/
+supabase/.temp/
+
+# Frontend
+web/node_modules/
+web/dist/
+web/.env.local

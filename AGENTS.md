@@ -12,6 +12,7 @@ Personal time-tracking analytics dashboard that pulls 10 years of Toggl data int
 
 ## Commands
 
+### Legacy Streamlit Stack
 ```bash
 pip install -r requirements.txt   # Install dependencies
 streamlit run app.py              # Run locally on :8501
@@ -21,16 +22,43 @@ python -m analysis --start 2020-01-01 --end 2024-12-31  # Date-filtered report
 python -m analysis --output path/to/report.html --no-open --quiet
 ```
 
+### New Supabase + Web Stack
+```bash
+# Backend / Database
+supabase start
+supabase db reset
+python scripts/sync_to_supabase.py --mode quick
+
+# Frontend
+cd web
+npm install
+npm run dev
+```
+
 No test framework. No linter. No type checker configured.
 
 ## Architecture
 
+**[MIGRATION IN PROGRESS] The project is currently operating in a dual mode:**
+1. **Legacy Streamlit path:** Local SQLite database, password-protected UI.
+2. **New Supabase + Web path:** Supabase Postgres, Edge Functions, React/Vite frontend with Supabase Auth.
+
+### Legacy Streamlit
 - 4 Streamlit pages behind `st.navigation` (Homepage, Dashboard, Retrospect, Chat)
 - API client with sliding-window rate limiter (auto-detects Premium 600 req/hr from headers)
 - Sync engine: CSV sync (fast, 1 call/year) + JSON enrichment sync (full field set, Premium)
 - Pattern-matching chat engine (regex-routed, supports projects/tags/clients/tasks)
 - Theme system: CSS injection + custom Plotly template
 - Password-protected login via `DASHBOARD_PASSWORD`
+
+### New Supabase + Web Stack
+- React + TypeScript + Vite frontend
+- Supabase Postgres for data persistence with RLS policies
+- Edge Function (`chat-query`) for regex-routed chat responses
+- User authenticates via Supabase Auth (email/password)
+- Direct frontend read access to Postgres via views and RPCs
+- Server-side Python scripts (`scripts/sync_to_supabase.py`) running in GitHub Actions for daily `quick` sync and manual `full`/`enriched` sync
+- Only service-role can insert/update database records
 
 ## Analysis Module (`analysis/`)
 
