@@ -1,5 +1,13 @@
 import { supabase } from './supabase'
 
+const isDemoMode = !import.meta.env.VITE_SUPABASE_URL || 
+                   !import.meta.env.VITE_SUPABASE_ANON_KEY ||
+                   import.meta.env.VITE_SUPABASE_URL.includes('localhost:54321')
+
+export function isRunningInDemoMode(): boolean {
+  return isDemoMode
+}
+
 export type DateRange = { startDate: string; endDate: string };
 export type ViewMode = "single_year" | "all_time" | "custom_range";
 

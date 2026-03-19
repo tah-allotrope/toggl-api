@@ -20,12 +20,30 @@ Project: Toggl Time Journal (Supabase + Web migration path)
   - `web/src/pages/Retrospect.tsx`
   - `web/src/pages/Chat.tsx`
 
+## This Session (2026-03-19)
+
+- Attempted Supabase CLI installation via Chocolatey - package not found
+- Downloaded Supabase CLI binary directly - Docker unavailable (required for `supabase start`)
+- Created **demo/offline mode** for web app to function without backend:
+  - Modified `web/src/lib/supabase.ts` to detect missing credentials and return mock data
+  - Added gradient banner in `web/src/main.tsx` showing "DEMO MODE" when running without Supabase
+  - Added `isRunningInDemoMode()` export in `web/src/lib/api.ts`
+  - Mock data includes: time entries, project/tag breakdowns, on-this-day history, chat responses
+  - Demo mode activates automatically when `VITE_SUPABASE_URL` is missing or points to localhost
+- Fixed TypeScript build error (line too long in supabase.ts mock builder)
+- Successfully built and started dev server at **http://localhost:5174/**
+
 ## Verification Completed
 
 - Python syntax check passed:
   - `python -m py_compile scripts/sync_to_supabase.py scripts/supabase_db.py`
 - Frontend build passed after dependency install:
   - `npm install && npm run build` in `web/`
+- Demo mode verified working:
+  - Homepage shows mock weekly highlights
+  - Dashboard shows mock metrics and breakdowns
+  - Retrospect shows mock "on this day" history
+  - Chat responds to demo queries ("top projects in 2024", "today", etc.)
 
 ## Outstanding Items
 
@@ -56,3 +74,4 @@ Project: Toggl Time Journal (Supabase + Web migration path)
 - Main risk reduced: sync modes should no longer fail immediately due missing client methods/signature mismatch.
 - Main correctness fix: custom-range RPCs now reference function params rather than tautological column comparisons.
 - Main security fix: `chat-query` is now gated by JWT validation.
+- Demo mode now allows immediate UI preview without requiring Supabase CLI/Docker setup.
