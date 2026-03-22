@@ -11,7 +11,11 @@ from typing import Literal
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.toggl_client import TogglClient
-from scripts.transform_toggl import transform_csv_entry, transform_json_entry
+from scripts.transform_toggl import (
+    build_canonical_entry_key,
+    transform_csv_entry,
+    transform_json_entry,
+)
 from scripts.supabase_db import (
     upsert_time_entries_pg,
     upsert_projects_pg,
@@ -151,6 +155,15 @@ def run_sync(
                     normalized_entries[idx]["project_name"] = row.get("project_name")
                     normalized_entries[idx]["task_name"] = row.get("task_name")
                     normalized_entries[idx]["client_name"] = row.get("client_name")
+                    normalized_entries[idx]["canonical_key"] = (
+                        build_canonical_entry_key(
+                            normalized_entries[idx].get("start", ""),
+                            normalized_entries[idx].get("stop", ""),
+                            normalized_entries[idx].get("description", ""),
+                            normalized_entries[idx].get("project_name", ""),
+                            normalized_entries[idx].get("duration", 0),
+                        )
+                    )
                 if not dry_run and entries:
                     with get_pg_connection() as conn:
                         summary.entries_written += upsert_time_entries_pg(

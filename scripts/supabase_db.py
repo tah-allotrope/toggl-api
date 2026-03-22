@@ -19,6 +19,22 @@ def _resolve_existing_time_entry_id(
     if existing:
         return int(existing[0])
 
+    canonical_key = entry.get("canonical_key")
+    if canonical_key:
+        cur.execute(
+            """
+            SELECT id
+            FROM public.time_entries
+            WHERE canonical_key = %(canonical_key)s
+            ORDER BY CASE WHEN toggl_id IS NULL THEN 0 ELSE 1 END, id
+            LIMIT 1;
+            """,
+            {"canonical_key": canonical_key},
+        )
+        canonical_match = cur.fetchone()
+        if canonical_match:
+            return int(canonical_match[0])
+
     cur.execute(
         """
         SELECT id
@@ -58,12 +74,12 @@ def upsert_time_entries_pg(
         INSERT INTO public.time_entries (
             id, description, start, stop, duration, project_id, project_name,
             workspace_id, tags, tag_ids, billable, at,
-            start_date, start_year, start_month, start_day, start_week, duration_hours,
+            start_date, start_year, start_month, start_day, start_week, duration_hours, canonical_key,
             toggl_id, task_id, task_name, client_name, user_id
         ) VALUES (
             %(id)s, %(description)s, %(start)s, %(stop)s, %(duration)s, %(project_id)s, %(project_name)s,
             %(workspace_id)s, %(tags)s, %(tag_ids)s, %(billable)s, %(at)s,
-            %(start_date)s, %(start_year)s, %(start_month)s, %(start_day)s, %(start_week)s, %(duration_hours)s,
+            %(start_date)s, %(start_year)s, %(start_month)s, %(start_day)s, %(start_week)s, %(duration_hours)s, %(canonical_key)s,
             %(toggl_id)s, %(task_id)s, %(task_name)s, %(client_name)s, %(user_id)s
         )
         ON CONFLICT (id) DO UPDATE SET
@@ -84,6 +100,7 @@ def upsert_time_entries_pg(
             start_day = EXCLUDED.start_day,
             start_week = EXCLUDED.start_week,
             duration_hours = EXCLUDED.duration_hours,
+            canonical_key = EXCLUDED.canonical_key,
             toggl_id = EXCLUDED.toggl_id,
             task_id = EXCLUDED.task_id,
             task_name = EXCLUDED.task_name,

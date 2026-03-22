@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS public.time_entries (
     start_day SMALLINT,
     start_week SMALLINT,  -- ISO week number
     duration_hours REAL,  -- duration in hours
+    canonical_key TEXT,   -- stable key for reconciling CSV and enriched copies
     -- Enrichment columns (populated by JSON sync, NULL from CSV sync)
     toggl_id BIGINT UNIQUE, -- native Toggl entry ID (NULL until enriched)
     task_id BIGINT,        -- Premium: task assignment
@@ -94,6 +95,10 @@ CREATE INDEX IF NOT EXISTS idx_entries_project ON public.time_entries(project_id
 CREATE INDEX IF NOT EXISTS idx_entries_week ON public.time_entries(start_year, start_week);
 CREATE INDEX IF NOT EXISTS idx_entries_task ON public.time_entries(task_id);
 CREATE INDEX IF NOT EXISTS idx_entries_client_name ON public.time_entries(client_name);
+CREATE INDEX IF NOT EXISTS idx_entries_canonical_key ON public.time_entries(canonical_key);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_entries_csv_canonical_key
+    ON public.time_entries(canonical_key)
+    WHERE toggl_id IS NULL AND canonical_key IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_tasks_project ON public.tasks(project_id);
 CREATE INDEX IF NOT EXISTS idx_projects_client ON public.projects(client_id);
