@@ -30,6 +30,10 @@ Project: Toggl Time Journal (Supabase + Web migration path)
   - Extended initial schema in `supabase/migrations/20260318_000001_init_schema.sql` with `time_entries.canonical_key` plus supporting indexes.
   - Added forward migration `supabase/migrations/20260322_000004_time_entry_canonical_key.sql` to backfill canonical keys on existing databases.
 - Added `scripts/verify_dedupe_reconciliation.py` to seed one CSV-style fixture row plus one enriched fixture row and assert they reconcile into a single logical Postgres row.
+- Added `scripts/verify_supabase_db_state.py` to validate migration state on a real Postgres target:
+  - Confirms `time_entries.canonical_key` exists, is backfilled, and required indexes are present.
+  - Confirms RPC functions use `p_start_date` / `p_end_date` argument names.
+  - Seeds bounded fixtures and verifies custom-range RPCs only return in-range rows.
 
 ## This Session (2026-03-19)
 
@@ -57,6 +61,59 @@ Project: Toggl Time Journal (Supabase + Web migration path)
   - `scripts/verify_dedupe_reconciliation.py` still requires a reachable database via `SUPABASE_DB_URL`.
   - Full migration apply/reset remains blocked without a working local Supabase runtime or target Postgres environment.
 
+## This Session (2026-03-24)
+
+- Added `scripts/verify_supabase_db_state.py` to turn the remaining SQL verification work into a repeatable Postgres-backed check instead of a manual checklist.
+- The new verification script covers both outstanding SQL risks in one run:
+  - migration/backfill state for `canonical_key`
+  - custom-range RPC parameter/signature and bounded-result behavior
+- Updated Postgres-backed scripts to load `.env` automatically and accept `DATABASE_URL` as a fallback to `SUPABASE_DB_URL`:
+  - `scripts/sync_to_supabase.py`
+  - `scripts/verify_dedupe_reconciliation.py`
+  - `scripts/verify_supabase_db_state.py`
+- Added shared environment helpers in `scripts/env_utils.py` so sync and verification scripts resolve credentials consistently.
+- Added `scripts/doctor_supabase_env.py` as a one-command readiness check for the next session:
+  - checks `TOGGL_API_TOKEN` presence
+  - checks `SUPABASE_URL` / key presence
+  - checks `DATABASE_URL` parsing, DNS resolution, and TCP reachability
+- Confirmed the new script compiles cleanly:
+  - `python -m py_compile scripts/verify_supabase_db_state.py`
+- Confirmed all updated Python scripts compile cleanly:
+  - `python -m py_compile scripts/env_utils.py scripts/doctor_supabase_env.py scripts/sync_to_supabase.py scripts/verify_dedupe_reconciliation.py scripts/verify_supabase_db_state.py`
+- Ran the new environment doctor:
+  - `python scripts/doctor_supabase_env.py`
+  - Result: `TOGGL_API_TOKEN` missing, `SUPABASE_URL` and key present, `DATABASE_URL` present, but DB host DNS lookup still fails.
+- Added `scripts/apply_hosted_supabase_migrations.py` to apply the pending SQL migrations directly to the reachable hosted Supabase database when local CLI access is unavailable.
+- Updated local runtime env files so the active app paths use real credentials:
+  - `.env` now includes `TOGGL_API_TOKEN`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and `SUPABASE_DB_URL`
+  - `web/.env` now provides the active Vite app with real Supabase URL + anon key
+- Applied the missing hosted SQL changes successfully:
+  - `python scripts/apply_hosted_supabase_migrations.py`
+  - Applied `supabase/migrations/20260318_000003_views_and_rpc.sql`
+  - Applied `supabase/migrations/20260322_000004_time_entry_canonical_key.sql`
+- Found and fixed one live-schema compatibility bug after applying migrations:
+  - `public.time_entries.tags` is `TEXT` on the hosted DB, so `get_tag_breakdown` now casts `te.tags::jsonb` before using JSONB functions.
+- Reran hosted verification successfully after the live migration fix:
+  - `python scripts/verify_supabase_db_state.py`
+  - `python scripts/verify_dedupe_reconciliation.py`
+- Confirmed sync smoke test now succeeds with real credentials:
+  - `python scripts/sync_to_supabase.py --mode quick --dry-run`
+  - Result: `entries_written=1874`, `projects_written=29`, `tags_written=3`, `clients_written=0`, `tasks_written=0`, `errors=[]`
+- Built and started the real web frontend against hosted Supabase:
+  - `npm run build` in `web/` passed
+  - `npm run dev -- --host 0.0.0.0` in `web/` started successfully
+  - Preview URL: `http://localhost:5173/toggl-api/`
+- Attempted live Postgres verification using `.env` `DATABASE_URL`, but execution is still blocked by environment, not code:
+  - `python scripts/verify_supabase_db_state.py`
+  - `python scripts/verify_dedupe_reconciliation.py`
+  - Both failed with DNS resolution errors for `db.itxfaxlnlbzbddyvqvwd.supabase.co`.
+- Confirmed the configured Supabase project host itself does not currently resolve from this environment:
+  - `nslookup db.itxfaxlnlbzbddyvqvwd.supabase.co`
+  - `nslookup itxfaxlnlbzbddyvqvwd.supabase.co`
+- Attempted the next sync smoke test:
+  - `python scripts/sync_to_supabase.py --mode quick --dry-run`
+  - This failed immediately because `TOGGL_API_TOKEN` is not present in `.env`.
+
 ## Verification Completed
 
 - Python syntax check passed:
@@ -71,6 +128,18 @@ Project: Toggl Time Journal (Supabase + Web migration path)
 - Dedupe hardening verification completed:
   - Canonical-key generation is stable across equivalent CSV and JSON fixtures.
   - Updated Python sync/database modules pass syntax compilation.
+- DB verification automation added and syntax-checked:
+  - `python -m py_compile scripts/env_utils.py scripts/doctor_supabase_env.py scripts/sync_to_supabase.py scripts/verify_dedupe_reconciliation.py scripts/verify_supabase_db_state.py`
+  - `python scripts/doctor_supabase_env.py`
+- Hosted migration and verification completed:
+  - `python scripts/apply_hosted_supabase_migrations.py`
+  - `python scripts/verify_supabase_db_state.py`
+  - `python scripts/verify_dedupe_reconciliation.py`
+- Real sync dry-run completed:
+  - `python scripts/sync_to_supabase.py --mode quick --dry-run`
+- Real frontend build and preview completed:
+  - `npm run build` in `web/`
+  - `http://localhost:5173/toggl-api/`
 
 ## Outstanding Items
 
@@ -80,27 +149,21 @@ Project: Toggl Time Journal (Supabase + Web migration path)
   - There is still no global uniqueness constraint that can guarantee one-row-only semantics across all historical import edge cases.
 - Edge function auth now depends on environment vars (`SUPABASE_URL`, `SUPABASE_ANON_KEY`) being correctly set in Supabase Functions runtime.
 - No end-to-end sync dry-run against live Toggl + Supabase has been executed since the canonical dedupe hardening landed.
-- `scripts/verify_dedupe_reconciliation.py` has not been executed against a live/local Postgres database yet because `SUPABASE_DB_URL` was not available in this session.
+- Frontend chat auth from a real signed-in session is still not explicitly verified end-to-end.
 - Working tree contains many untracked paths from migration work (`scripts/`, `supabase/`, `web/`, etc.); no commit created.
 
 ## Recommended Next Steps (Next Session)
 
 1. Apply and validate DB migration changes:
-    - `supabase db reset` (local) or equivalent migration apply command in target env.
-    - Ensure `supabase/migrations/20260322_000004_time_entry_canonical_key.sql` runs successfully and backfills existing rows.
-    - Verify RPC custom-range returns correct bounded results.
-2. Run sync smoke tests against real credentials:
-    - `python scripts/sync_to_supabase.py --mode quick --dry-run`
+    - Done on hosted Supabase for the current environment.
+ 2. Run the enriched sync smoke test against real credentials:
     - `python scripts/sync_to_supabase.py --mode enriched --earliest-year <year> --dry-run`
-3. Validate duplicate reconciliation behavior with a controlled fixture:
-    - Run `python scripts/verify_dedupe_reconciliation.py` against a real/local Postgres DB.
-    - Confirm one reconciled row remains and enriched fields (`toggl_id`, `project_id`, `task_id`, `client_name`) are retained.
-4. Decide on hardening plan for dedupe:
+ 3. Validate chat auth from frontend session:
+    - Confirm unauthenticated call returns `401` and authenticated call succeeds.
+ 4. Decide on hardening plan for dedupe:
     - Decide whether current `canonical_key` + reconciliation behavior is sufficient.
     - If not, add a stronger migration-backed strategy (for example a reconciliation cleanup job and/or a stricter unique constraint after data cleanup).
-5. Validate chat auth from frontend session:
-    - Confirm unauthenticated call returns `401` and authenticated call succeeds.
-6. If all checks pass, stage and commit with a focused message grouping sync/sql/auth/frontend fixes.
+ 5. If all checks pass, stage and commit with a focused message grouping sync/sql/auth/frontend fixes.
 
 ## Notes for Handoff
 

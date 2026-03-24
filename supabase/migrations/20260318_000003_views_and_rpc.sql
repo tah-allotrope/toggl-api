@@ -84,7 +84,12 @@ BEGIN
         SUM(te.duration_hours)::REAL AS hours,
         COUNT(*)::BIGINT AS entries
     FROM public.time_entries te
-    CROSS JOIN jsonb_array_elements(CASE WHEN jsonb_typeof(te.tags) = 'array' THEN te.tags ELSE '[]'::jsonb END) AS tag_val
+    CROSS JOIN jsonb_array_elements(
+        CASE
+            WHEN jsonb_typeof(te.tags::jsonb) = 'array' THEN te.tags::jsonb
+            ELSE '[]'::jsonb
+        END
+    ) AS tag_val
     WHERE te.duration > 0
       AND (view_mode = 'all_time'
            OR (view_mode = 'single_year' AND te.start_year = filter_year)

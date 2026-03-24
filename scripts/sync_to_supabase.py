@@ -11,6 +11,7 @@ from typing import Literal
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.toggl_client import TogglClient
+from scripts.env_utils import get_postgres_url
 from scripts.transform_toggl import (
     build_canonical_entry_key,
     transform_csv_entry,
@@ -38,10 +39,7 @@ class SyncSummary:
 
 
 def get_pg_connection():
-    db_url = os.environ.get("SUPABASE_DB_URL")
-    if not db_url:
-        raise ValueError("SUPABASE_DB_URL environment variable is required")
-    return psycopg.connect(db_url)
+    return psycopg.connect(get_postgres_url())
 
 
 def run_sync(

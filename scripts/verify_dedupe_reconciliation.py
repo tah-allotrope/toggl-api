@@ -5,6 +5,7 @@ import psycopg
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from scripts.env_utils import get_postgres_url
 from scripts.supabase_db import upsert_time_entries_pg
 from scripts.transform_toggl import transform_csv_entry, transform_json_entry
 
@@ -14,10 +15,21 @@ TEST_PROJECT = "Verification Project"
 
 
 def get_pg_connection() -> psycopg.Connection:
-    db_url = os.environ.get("SUPABASE_DB_URL")
-    if not db_url:
-        raise ValueError("SUPABASE_DB_URL environment variable is required")
-    return psycopg.connect(db_url)
+    return psycopg.connect(get_postgres_url())
+
+
+def canonical_key_column_exists(conn: psycopg.Connection) -> bool:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'time_entries'
+              AND column_name = 'canonical_key';
+            """
+        )
+        return cur.fetchone() is not None
 
 
 def build_fixture_entries() -> tuple[dict, dict]:
@@ -71,6 +83,12 @@ def main() -> int:
 
     with get_pg_connection() as conn:
         try:
+            if not canonical_key_column_exists(conn):
+                print(
+                    "Verification requires public.time_entries.canonical_key; apply the canonical-key migration first"
+                )
+                return 1
+
             with conn.cursor() as cur:
                 cur.execute(
                     "DELETE FROM public.time_entries WHERE canonical_key = %s;",
@@ -124,6 +142,7 @@ def main() -> int:
             print(f"canonical_key={canonical_key}")
             return 0
         finally:
+            conn.rollback()
             with conn.cursor() as cur:
                 cur.execute(
                     "DELETE FROM public.time_entries WHERE canonical_key = %s;",
