@@ -30,6 +30,7 @@ function getCurrentIsoWeekRange(): { monday: string; sunday: string; isoWeek: nu
 
 export default function Homepage() {
   const [highlights, setHighlights] = useState<any[]>([])
+  const [errorMessage, setErrorMessage] = useState('')
   const [isoWeekLabel, setIsoWeekLabel] = useState<number | null>(null)
 
   useEffect(() => {
@@ -45,7 +46,12 @@ export default function Homepage() {
         .lte('start_date', sunday)
         .order('start', { ascending: true })
 
-      if (!error && data) {
+      if (error) {
+        setErrorMessage(error.message)
+        return
+      }
+
+      if (data) {
         setHighlights(data)
       }
     }
@@ -56,6 +62,7 @@ export default function Homepage() {
     <div className="container">
       <h1>Weekly Highlights</h1>
       {isoWeekLabel !== null && <p>Week {isoWeekLabel}</p>}
+      {errorMessage && <p className="error-text">{errorMessage}</p>}
       {highlights.length === 0 ? (
         <p>No highlights found.</p>
       ) : (

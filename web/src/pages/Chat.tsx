@@ -13,8 +13,8 @@ export default function Chat() {
     try {
       const res = await askChat(question)
       setAnswer(res.answer)
-    } catch (err: any) {
-      setAnswer(`Error: ${err.message}`)
+    } catch (error) {
+      setAnswer(`Error: ${error instanceof Error ? error.message : 'Unable to load chat response.'}`)
     } finally {
       setLoading(false)
     }

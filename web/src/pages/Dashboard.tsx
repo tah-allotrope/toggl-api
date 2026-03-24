@@ -3,23 +3,29 @@ import { fetchOverview, fetchProjectBreakdown, fetchTagBreakdown, OverviewMetric
 
 export default function Dashboard() {
   const [metrics, setMetrics] = useState<OverviewMetrics | null>(null)
+  const [errorMessage, setErrorMessage] = useState('')
   const [projects, setProjects] = useState<any[]>([])
   const [tags, setTags] = useState<any[]>([])
   const [mode, setMode] = useState<ViewMode>('all_time')
 
   useEffect(() => {
     async function load() {
-      const year = new Date().getFullYear()
-      const m = await fetchOverview(mode, mode === 'single_year' ? year : null, null)
-      setMetrics(m)
-      
-      const p = await fetchProjectBreakdown(mode, mode === 'single_year' ? year : null, null)
-      setProjects(p.slice(0, 10))
-      
-      const t = await fetchTagBreakdown(mode, mode === 'single_year' ? year : null, null)
-      setTags(t.slice(0, 10))
+      try {
+        setErrorMessage('')
+        const year = new Date().getFullYear()
+        const m = await fetchOverview(mode, mode === 'single_year' ? year : null, null)
+        setMetrics(m)
+
+        const p = await fetchProjectBreakdown(mode, mode === 'single_year' ? year : null, null)
+        setProjects(p.slice(0, 10))
+
+        const t = await fetchTagBreakdown(mode, mode === 'single_year' ? year : null, null)
+        setTags(t.slice(0, 10))
+      } catch (error) {
+        setErrorMessage(error instanceof Error ? error.message : 'Unable to load dashboard data.')
+      }
     }
-    load()
+    void load()
   }, [mode])
 
   return (
@@ -29,6 +35,7 @@ export default function Dashboard() {
         <button onClick={() => setMode('all_time')}>All Time</button>
         <button onClick={() => setMode('single_year')}>This Year</button>
       </div>
+      {errorMessage && <p className="error-text">{errorMessage}</p>}
       
       {metrics && (
         <div className="metrics">

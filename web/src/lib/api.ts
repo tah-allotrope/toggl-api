@@ -1,11 +1,7 @@
-import { supabase } from './supabase'
-
-const isDemoMode = !import.meta.env.VITE_SUPABASE_URL || 
-                   !import.meta.env.VITE_SUPABASE_ANON_KEY ||
-                   import.meta.env.VITE_SUPABASE_URL.includes('localhost:54321')
+import { isRunningInDemoMode as isSupabaseDemoMode, supabase } from './supabase'
 
 export function isRunningInDemoMode(): boolean {
-  return isDemoMode
+  return isSupabaseDemoMode()
 }
 
 export type DateRange = { startDate: string; endDate: string };
