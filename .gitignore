@@ -17,3 +17,5 @@ supabase/.temp/
 web/node_modules/
 web/dist/
 web/.env.local
+web/tmp/
+web/*.tsbuildinfo
