@@ -2,7 +2,6 @@ import { StrictMode } from 'react'
 import ReactDOM from 'react-dom/client'
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
 import AppShell from './components/AppShell'
-import ProtectedRoute from './components/ProtectedRoute'
 import { AuthProvider } from './lib/auth'
 import Homepage from './pages/Homepage'
 import Dashboard from './pages/Dashboard'
@@ -38,13 +37,11 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       <HashRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
-          <Route element={<ProtectedRoute />}>
-            <Route element={<AppShell />}>
-              <Route path="/" element={<Homepage />} />
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/retrospect" element={<Retrospect />} />
-              <Route path="/chat" element={<Chat />} />
-            </Route>
+          <Route element={<AppShell />}>
+            <Route path="/" element={<Homepage />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/retrospect" element={<Retrospect />} />
+            <Route path="/chat" element={<Chat />} />
           </Route>
           <Route path="*" element={<Navigate replace to="/" />} />
         </Routes>
