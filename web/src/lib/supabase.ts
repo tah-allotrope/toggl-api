@@ -33,8 +33,6 @@ type MockEntry = {
   tags: string[]
 }
 
-type MockResult<T> = { data: T; error: null }
-
 type FilterOperator = 'contains' | 'gte' | 'lte'
 
 type Filter = {
