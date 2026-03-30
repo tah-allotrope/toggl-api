@@ -20,8 +20,6 @@ const hasValidSupabaseConfig = supabaseUrl &&
 
 const isDemoMode = !hasValidSupabaseConfig
 
-console.log('Supabase config:', { supabaseUrl, supabaseAnonKey, hasValidSupabaseConfig, isDemoMode })
-
 let createClient: ((url: string, key: string) => SupabaseClient) | null = null
 
 if (!isDemoMode) {
