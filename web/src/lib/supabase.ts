@@ -3,7 +3,13 @@ import { createClient, type Session, type SupabaseClient } from '@supabase/supab
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-const isDemoMode = !supabaseUrl || !supabaseAnonKey || supabaseUrl.includes('localhost')
+const hasValidSupabaseConfig = supabaseUrl && supabaseAnonKey && 
+  supabaseUrl.trim().length > 0 && 
+  supabaseAnonKey.trim().length > 0 &&
+  !supabaseUrl.includes('localhost') &&
+  !supabaseUrl.includes('example')
+
+const isDemoMode = !hasValidSupabaseConfig
 
 if (isDemoMode) {
   console.log('Running in demo mode - using mock data')
