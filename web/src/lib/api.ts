@@ -102,3 +102,53 @@ export async function askChat(question: string): Promise<{ answer: string }> {
   if (error) throw error
   return data as { answer: string }
 }
+
+export async function fetchAvailableYears(): Promise<number[]> {
+  const { data, error } = await supabase.rpc('get_available_years')
+  if (error) throw error
+  return data.map((d: any) => d.year)
+}
+
+export async function fetchDailyHours(mode: ViewMode, year: number | null, range: DateRange | null): Promise<Array<{ date: string; hours: number; entries: number }>> {
+  const { data, error } = await supabase.rpc('get_daily_hours', {
+    view_mode: mode,
+    filter_year: year,
+    p_start_date: range?.startDate,
+    p_end_date: range?.endDate
+  })
+  if (error) throw error
+  return data.map((d: any) => ({ date: d.start_date, hours: d.hours, entries: d.entries }))
+}
+
+export async function fetchMonthlyHours(mode: ViewMode, year: number | null, range: DateRange | null): Promise<Array<{ month: string; hours: number }>> {
+  const { data, error } = await supabase.rpc('get_monthly_hours', {
+    view_mode: mode,
+    filter_year: year,
+    p_start_date: range?.startDate,
+    p_end_date: range?.endDate
+  })
+  if (error) throw error
+  return data.map((d: any) => ({ month: d.month, hours: d.hours }))
+}
+
+export async function fetchYearComparison(yearA: number, yearB: number): Promise<Array<{ month: string; hoursA: number; hoursB: number }>> {
+  const { data, error } = await supabase.rpc('get_year_comparison', {
+    year_a: yearA,
+    year_b: yearB
+  })
+  if (error) throw error
+  return data.map((d: any) => ({ month: d.month, hoursA: d.hours_a, hoursB: d.hours_b }))
+}
+
+export async function fetchTopDescriptions(mode: ViewMode, year: number | null, range: DateRange | null, projectName: string, limit?: number): Promise<Array<{ description: string; hours: number; entries: number }>> {
+  const { data, error } = await supabase.rpc('get_top_descriptions', {
+    view_mode: mode,
+    filter_year: year,
+    p_start_date: range?.startDate,
+    p_end_date: range?.endDate,
+    p_project_name: projectName,
+    p_limit: limit || 10
+  })
+  if (error) throw error
+  return data.map((d: any) => ({ description: d.description, hours: d.hours, entries: d.entries }))
+}

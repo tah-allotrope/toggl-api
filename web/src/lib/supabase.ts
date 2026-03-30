@@ -81,6 +81,51 @@ const mockEntries: MockEntry[] = [
     start: '2024-01-18T09:00:00Z',
     duration_hours: 4,
     tags: ['Deep Work']
+  },
+  {
+    id: 6,
+    description: 'Client meeting',
+    project_name: 'Project Beta',
+    start_date: '2024-01-18',
+    start: '2024-01-18T14:00:00Z',
+    duration_hours: 2,
+    tags: ['Meeting']
+  },
+  {
+    id: 7,
+    description: 'Bug fixes',
+    project_name: 'Project Alpha',
+    start_date: '2024-01-19',
+    start: '2024-01-19T09:00:00Z',
+    duration_hours: 3.5,
+    tags: ['Deep Work']
+  },
+  {
+    id: 8,
+    description: 'Documentation',
+    project_name: 'Project Gamma',
+    start_date: '2024-01-19',
+    start: '2024-01-19T13:00:00Z',
+    duration_hours: 1,
+    tags: ['Admin']
+  },
+  {
+    id: 9,
+    description: 'Sprint planning',
+    project_name: 'Project Beta',
+    start_date: '2024-01-20',
+    start: '2024-01-20T10:00:00Z',
+    duration_hours: 1.5,
+    tags: ['Meeting']
+  },
+  {
+    id: 10,
+    description: 'API development',
+    project_name: 'Project Alpha',
+    start_date: '2024-01-20',
+    start: '2024-01-20T11:30:00Z',
+    duration_hours: 4,
+    tags: ['Deep Work']
   }
 ]
 
@@ -234,6 +279,108 @@ export const supabase = {
               { year: 2023, hours: 4, entries: 2 },
               { year: 2022, hours: 3.5, entries: 2 }
             ]
+          } else if (fn === 'get_available_years') {
+            data = [
+              { year: 2026 },
+              { year: 2025 },
+              { year: 2024 },
+              { year: 2023 },
+              { year: 2022 }
+            ]
+          } else if (fn === 'get_daily_hours') {
+            const entries = params.filter_year
+              ? filterByYear(mockEntries, params.filter_year)
+              : mockEntries
+            const grouped: Record<string, { hours: number; entriesCount: number }> = {}
+            for (const entry of entries) {
+              const key = entry.start_date
+              if (!grouped[key]) {
+                grouped[key] = { hours: 0, entriesCount: 0 }
+              }
+              grouped[key].hours += entry.duration_hours
+              grouped[key].entriesCount += 1
+            }
+            data = Object.entries(grouped)
+              .map(([start_date, value]) => ({ start_date, hours: value.hours, entries: value.entriesCount }))
+              .sort((a, b) => a.start_date.localeCompare(b.start_date))
+          } else if (fn === 'get_monthly_hours') {
+            const entries = params.filter_year
+              ? filterByYear(mockEntries, params.filter_year)
+              : mockEntries
+            const grouped: Record<string, number> = {}
+            for (const entry of entries) {
+              const month = entry.start_date.substring(0, 7)
+              grouped[month] = (grouped[month] || 0) + entry.duration_hours
+            }
+            data = Object.entries(grouped)
+              .map(([month, hours]) => ({ month, hours }))
+              .sort((a, b) => a.month.localeCompare(b.month))
+          } else if (fn === 'get_year_comparison') {
+            const yearA = params.year_a
+            const yearB = params.year_b
+            const entriesA = filterByYear(mockEntries, yearA)
+            const entriesB = filterByYear(mockEntries, yearB)
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+            data = months.map((month, idx) => {
+              const monthNum = String(idx + 1).padStart(2, '0')
+              const hoursA = entriesA
+                .filter(e => e.start_date.startsWith(`${yearA}-${monthNum}`))
+                .reduce((sum, e) => sum + e.duration_hours, 0)
+              const hoursB = entriesB
+                .filter(e => e.start_date.startsWith(`${yearB}-${monthNum}`))
+                .reduce((sum, e) => sum + e.duration_hours, 0)
+              return { month, hours_a: hoursA, hours_b: hoursB }
+            })
+          } else if (fn === 'get_week_across_years') {
+            data = [
+              { year: 2026, hours: 12.5, entries: 5 },
+              { year: 2025, hours: 15.2, entries: 6 },
+              { year: 2024, hours: 18.0, entries: 7 },
+              { year: 2023, hours: 10.5, entries: 4 }
+            ]
+          } else if (fn === 'get_top_descriptions') {
+            const entries = params.filter_year
+              ? filterByYear(mockEntries, params.filter_year)
+              : mockEntries
+            const projectEntries = entries.filter(e => e.project_name === params.p_project_name)
+            const grouped: Record<string, { hours: number; entriesCount: number }> = {}
+            for (const entry of projectEntries) {
+              const key = entry.description || 'No description'
+              if (!grouped[key]) {
+                grouped[key] = { hours: 0, entriesCount: 0 }
+              }
+              grouped[key].hours += entry.duration_hours
+              grouped[key].entriesCount += 1
+            }
+            const limit = params.p_limit || 10
+            data = Object.entries(grouped)
+              .map(([description, value]) => ({ description, hours: value.hours, entries: value.entriesCount }))
+              .sort((a, b) => b.hours - a.hours)
+              .slice(0, limit)
+          } else if (fn === 'get_client_breakdown') {
+            const entries = params.filter_year
+              ? filterByYear(mockEntries, params.filter_year)
+              : mockEntries
+            const grouped: Record<string, { hours: number; entriesCount: number }> = {}
+            for (const entry of entries) {
+              const key = 'Client A'
+              if (!grouped[key]) {
+                grouped[key] = { hours: 0, entriesCount: 0 }
+              }
+              grouped[key].hours += entry.duration_hours
+              grouped[key].entriesCount += 1
+            }
+            data = Object.entries(grouped)
+              .map(([client_name, value]) => ({ client_name, hours: value.hours, entries: value.entriesCount }))
+              .sort((a, b) => b.hours - a.hours)
+          } else if (fn === 'get_task_breakdown') {
+            const entries = params.filter_year
+              ? filterByYear(mockEntries, params.filter_year)
+              : mockEntries
+            data = entries
+              .filter(e => e.description)
+              .map(e => ({ task_name: e.description, hours: e.duration_hours, entries: 1 }))
+              .slice(0, 10)
           }
 
           return Promise.resolve(resolve({ data, error: null }))
