@@ -3,11 +3,20 @@ import type { Session, SupabaseClient } from '@supabase/supabase-js'
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-const hasValidSupabaseConfig = supabaseUrl && supabaseAnonKey && 
+function isValidUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url)
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
+const hasValidSupabaseConfig = supabaseUrl && 
+  supabaseAnonKey && 
   supabaseUrl.trim().length > 0 && 
   supabaseAnonKey.trim().length > 0 &&
-  !supabaseUrl.includes('localhost') &&
-  !supabaseUrl.includes('example')
+  isValidUrl(supabaseUrl)
 
 const isDemoMode = !hasValidSupabaseConfig
 
@@ -227,16 +236,16 @@ initClient()
 
 export const supabase = {
   from: (table: string) => {
-    if (isDemoMode) {
+    if (isDemoMode || !client) {
       return {
         select: (_columns?: string) => createMockQuery()
       }
     }
 
-    return client!.from(table)
+    return client.from(table)
   },
   rpc: (fn: string, params: any) => {
-    if (isDemoMode) {
+    if (isDemoMode || !client) {
       return {
         then: (resolve: (value: { data: any[]; error: null }) => void) => {
           let data: any[] = []
@@ -405,7 +414,7 @@ export const supabase = {
   },
   functions: {
     invoke: (_fn: string, options: any) => {
-      if (isDemoMode) {
+      if (isDemoMode || !client) {
         return {
           then: (resolve: (value: { data: { answer: string }; error: null }) => void) => {
             const question = options.body?.question?.toLowerCase() || ''
