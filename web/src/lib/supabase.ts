@@ -35,8 +35,6 @@ type MockEntry = {
 
 type MockResult<T> = { data: T; error: null }
 
-type MockQueryResult<T> = Promise<MockResult<T>>
-
 type FilterOperator = 'contains' | 'gte' | 'lte'
 
 type Filter = {
