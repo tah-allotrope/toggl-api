@@ -205,19 +205,20 @@ function createResolvedPromise<T>(data: T): MockQueryResult<T> {
 }
 
 function createMockQuery(filters: Filter[] = [], orderSpec: OrderSpec = null) {
-  return {
+  const baseQuery = {
     contains: (field: keyof MockEntry, value: string[]) => createMockQuery([...filters, { field, operator: 'contains', value }], orderSpec),
     gte: (field: keyof MockEntry, value: string) => createMockQuery([...filters, { field, operator: 'gte', value }], orderSpec),
     lte: (field: keyof MockEntry, value: string) => createMockQuery([...filters, { field, operator: 'lte', value }], orderSpec),
-    order: (field: keyof MockEntry, options?: { ascending?: boolean }) => createResolvedPromise(resolveMockRows(filters, {
+    order: (field: keyof MockEntry, options?: { ascending?: boolean }) => createMockQuery(filters, {
       field,
       ascending: options?.ascending ?? true
-    })),
-    then: (resolve: (value: { data: MockEntry[]; error: null }) => void) => Promise.resolve(resolve({
+    }),
+    then: (resolve: (value: { data: MockEntry[]; error: null }) => void, reject?: (error: any) => void) => Promise.resolve(resolve({
       data: resolveMockRows(filters, orderSpec),
       error: null
-    }))
+    })).then(resolve, reject)
   }
+  return baseQuery
 }
 
 let client: SupabaseClient | null = null
