@@ -1,4 +1,4 @@
-import { createClient, type Session, type SupabaseClient } from '@supabase/supabase-js'
+import type { Session, SupabaseClient } from '@supabase/supabase-js'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -10,6 +10,14 @@ const hasValidSupabaseConfig = supabaseUrl && supabaseAnonKey &&
   !supabaseUrl.includes('example')
 
 const isDemoMode = !hasValidSupabaseConfig
+
+let createClient: ((url: string, key: string) => SupabaseClient) | null = null
+
+if (!isDemoMode) {
+  import('@supabase/supabase-js').then(module => {
+    createClient = module.createClient
+  })
+}
 
 if (isDemoMode) {
   console.log('Running in demo mode - using mock data')
@@ -214,9 +222,13 @@ function createMockQuery(filters: Filter[] = [], orderSpec: OrderSpec = null) {
 
 let client: SupabaseClient | null = null
 
-if (!isDemoMode) {
-  client = createClient(supabaseUrl, supabaseAnonKey)
+async function initClient() {
+  if (!isDemoMode && createClient) {
+    client = createClient(supabaseUrl, supabaseAnonKey)
+  }
 }
+
+initClient()
 
 export const supabase = {
   from: (table: string) => {
